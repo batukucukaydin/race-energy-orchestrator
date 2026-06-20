@@ -1,0 +1,14 @@
+.DS_Store
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local analysis caches
+work/fastf1-cache/
+
+# Generated deliverables; remove these lines if you want reports versioned too.
+outputs/report.html
+outputs/metrics.csv
+outputs/strategy_trace.csv
