@@ -13,3 +13,4 @@ outputs/report.html
 outputs/dashboard.html
 outputs/metrics.csv
 outputs/strategy_trace.csv
+site/

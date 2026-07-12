@@ -24,11 +24,21 @@ Dashboard UI output:
 python -m sf26_energyos --synthetic-only --output outputs/dashboard.html
 ```
 
+Deploy-ready static output:
+
+```bash
+python -m sf26_energyos --synthetic-only --output docs/index.html
+python -m http.server 8000 --directory docs
+```
+
+Then open `http://localhost:8000`.
+
 Outputs:
 
 - `outputs/report.html`: self-contained Plotly HTML report
 - `outputs/metrics.csv`: fixed-map vs predictive strategy metrics
 - `outputs/strategy_trace.csv`: combined strategy trace
+- `docs/index.html`: static dashboard entrypoint for deployment
 
 ## Model Basis
 
