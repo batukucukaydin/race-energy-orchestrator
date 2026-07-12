@@ -2,7 +2,8 @@
   "name": "sf26-energyos-dashboard",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "mkdir -p dist && cp -R docs/. dist/"
+    "build": "node scripts/build-worker.mjs"
   }
 }
