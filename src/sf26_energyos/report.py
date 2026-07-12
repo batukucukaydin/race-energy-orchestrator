@@ -24,80 +24,295 @@ def render_report(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     fig = _build_strategy_figure(fixed_trace, predictive_trace, config)
-    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline")
-    metrics_html = _format_metrics(metrics)
-    segment_html = _segment_summary(base_frame)
-    notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes)
-    if not notes_html:
-        notes_html = "<li>No fallback notes.</li>"
+    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True})
+    notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
 
     html = f"""<!doctype html>
-<html lang="en">
+<html lang="tr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SF26 EnergyOS Prototype Report</title>
+  <title>SF26 EnergyOS Dashboard</title>
   <style>
     :root {{
-      --ink: #17202a;
-      --muted: #5d6978;
-      --line: #d8dee8;
-      --panel: #f7f9fc;
-      --accent: #b00020;
+      --bg: #f3f5f2;
+      --surface: #ffffff;
+      --surface-strong: #171a1f;
+      --ink: #14171c;
+      --muted: #66717d;
+      --line: #d9ded8;
+      --red: #b5121b;
+      --red-deep: #7f0c14;
+      --teal: #007a7a;
+      --amber: #bf7a00;
+      --blue: #245f9f;
+      --green: #2f7d4f;
+      --shadow: 0 18px 44px rgba(24, 29, 35, 0.10);
     }}
+    * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
-      background: #ffffff;
+      background:
+        linear-gradient(135deg, rgba(181, 18, 27, 0.08), transparent 26rem),
+        radial-gradient(circle at 80% 0%, rgba(0, 122, 122, 0.13), transparent 21rem),
+        repeating-linear-gradient(90deg, rgba(20, 23, 28, 0.025) 0 1px, transparent 1px 84px),
+        var(--bg);
+      font-family: "Avenir Next", "SF Pro Display", "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow-x: hidden;
     }}
     main {{
-      max-width: 1180px;
+      width: min(1440px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 28px 22px 48px;
+      padding: 26px 0 44px;
     }}
-    h1, h2 {{
-      margin: 0 0 12px;
-      letter-spacing: 0;
+    .shell {{
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-width: 0;
+    }}
+    aside {{
+      position: sticky;
+      top: 18px;
+      min-height: calc(100vh - 52px);
+      padding: 18px;
+      border-radius: 8px;
+      background: var(--surface-strong);
+      color: white;
+      box-shadow: var(--shadow);
+    }}
+    .brand {{
+      display: grid;
+      gap: 4px;
+      margin-bottom: 24px;
+    }}
+    .brand .mark {{
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: linear-gradient(135deg, var(--red), #f4c430);
+      font-weight: 800;
+    }}
+    .brand b {{
+      font-size: 18px;
+      margin-top: 6px;
+    }}
+    .brand span, aside p, .side-label {{
+      color: #b8c0c8;
+      line-height: 1.45;
+    }}
+    .side-block {{
+      padding: 14px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+    }}
+    .side-value {{
+      display: block;
+      margin-top: 5px;
+      color: white;
+      font-size: 20px;
+      font-weight: 750;
+    }}
+    .content {{
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      max-width: 100%;
+    }}
+    .hero {{
+      min-height: 260px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
+      gap: 18px;
+      align-items: stretch;
+      min-width: 0;
+    }}
+    .hero-main, .panel {{
+      border: 1px solid rgba(20, 23, 28, 0.09);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }}
+    .hero-main {{
+      position: relative;
+      overflow: hidden;
+      padding: 26px;
+      background:
+        linear-gradient(110deg, rgba(23, 26, 31, 0.96), rgba(23, 26, 31, 0.82)),
+        repeating-linear-gradient(45deg, rgba(255,255,255,0.10) 0 2px, transparent 2px 18px);
+      color: white;
+    }}
+    .hero-main::after {{
+      content: "";
+      position: absolute;
+      inset: auto -8% -28% 18%;
+      height: 190px;
+      transform: skewX(-18deg);
+      background: linear-gradient(90deg, transparent, rgba(181, 18, 27, 0.62), rgba(244, 196, 48, 0.34));
+    }}
+    .eyebrow {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #e9edf2;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
     }}
     h1 {{
-      font-size: 30px;
-      line-height: 1.18;
+      max-width: 760px;
+      margin: 24px 0 10px;
+      font-size: clamp(34px, 5vw, 74px);
+      line-height: 0.94;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
     }}
-    h2 {{
-      margin-top: 28px;
-      font-size: 19px;
+    .hero-main p {{
+      max-width: 760px;
+      color: #d9e0e7;
+      font-size: 16px;
+      line-height: 1.55;
+      position: relative;
+      z-index: 1;
     }}
-    p, li {{
-      color: var(--muted);
-      line-height: 1.5;
-    }}
-    .summary {{
+    .hero-metrics {{
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
-      margin: 18px 0 20px;
+      min-width: 0;
     }}
-    .stat {{
-      border: 1px solid var(--line);
+    .metric {{
+      min-height: 124px;
+      padding: 16px;
       border-radius: 8px;
-      padding: 14px;
-      background: var(--panel);
+      background: var(--surface);
+      border: 1px solid rgba(20, 23, 28, 0.08);
+      box-shadow: var(--shadow);
     }}
-    .stat b {{
+    .metric span {{
       display: block;
-      font-size: 20px;
-      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }}
+    .metric b {{
+      display: block;
+      margin-top: 10px;
+      font-size: 30px;
+      line-height: 1;
+    }}
+    .metric small {{
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+      gap: 16px;
+      align-items: start;
+      min-width: 0;
+    }}
+    .panel {{
+      padding: 18px;
+      min-width: 0;
+    }}
+    .panel h2 {{
+      margin: 0 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }}
+    .plot-panel {{
+      padding: 10px 10px 0;
+    }}
+    .plot-panel h2 {{
+      padding: 8px 8px 0;
+    }}
+    .track {{
+      display: flex;
+      width: 100%;
+      min-height: 42px;
+      overflow: hidden;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #edf1f4;
+    }}
+    .track span {{
+      display: block;
+      min-width: 3px;
+      height: 42px;
+    }}
+    .legend {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .legend i {{
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 5px;
+    }}
+    .command-list {{
+      display: grid;
+      gap: 9px;
+      max-height: 432px;
+      overflow: auto;
+      padding-right: 4px;
+    }}
+    .command {{
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f8faf8;
+      border: 1px solid var(--line);
+    }}
+    .command time {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .command b {{
+      display: block;
+      font-size: 13px;
+      letter-spacing: 0;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #e9f2ef;
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 750;
     }}
     table {{
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0 18px;
+      margin: 0;
       font-size: 13px;
     }}
     th, td {{
       border-bottom: 1px solid var(--line);
-      padding: 8px 9px;
+      padding: 9px 8px;
       text-align: right;
       vertical-align: top;
     }}
@@ -105,54 +320,104 @@ def render_report(
       text-align: left;
     }}
     th {{
-      background: var(--panel);
-      color: #354052;
-      font-weight: 650;
+      color: #33404c;
+      background: #f4f6f5;
+      font-weight: 750;
     }}
     code {{
-      background: #eef2f7;
+      background: #eef2f1;
       border-radius: 4px;
       padding: 1px 4px;
     }}
-    .notice {{
-      border-left: 4px solid var(--accent);
-      background: #fff6f7;
-      padding: 10px 14px;
-      margin: 18px 0;
+    p, li {{
+      color: var(--muted);
+      line-height: 1.5;
+      overflow-wrap: anywhere;
     }}
-    @media (max-width: 780px) {{
-      .summary {{ grid-template-columns: 1fr; }}
-      main {{ padding: 20px 14px 36px; }}
+    a {{ color: var(--red-deep); }}
+    @media (max-width: 1060px) {{
+      .shell, .hero, .grid {{ grid-template-columns: 1fr; }}
+      aside {{ position: relative; min-height: auto; top: 0; }}
+      .hero-main {{ min-height: 300px; }}
+      .shell, .content, .hero, .grid, .panel {{ width: 100%; max-width: 100%; }}
+    }}
+    @media (max-width: 680px) {{
+      main {{ width: min(100vw - 20px, 1440px); padding-top: 10px; }}
+      .hero-metrics {{ grid-template-columns: 1fr; }}
+      .metric {{ min-height: 104px; }}
+      .command {{ grid-template-columns: 1fr; }}
+      .hero-main {{ min-height: 260px; padding: 26px 18px; }}
+      h1 {{ max-width: min(320px, calc(100vw - 76px)); font-size: 34px; line-height: 1.02; }}
+      .hero-main p, aside p {{ max-width: min(280px, calc(100vw - 96px)); font-size: 14px; }}
+      .panel {{ overflow-x: auto; }}
     }}
   </style>
 </head>
 <body>
 <main>
-  <h1>SF26 EnergyOS Prototype Report</h1>
-  <p>Predictive 2026-style hybrid energy deployment and clipping prevention simulation.</p>
-  <div class="notice">
-    This report uses public FastF1 telemetry when available and synthetic 2026 ERS, battery,
-    thermal, active-aero, and strategy assumptions. It is not Ferrari telemetry and does not
-    represent real SF-26 parameters.
+  <div class="shell">
+    <aside>
+      <div class="brand">
+        <div class="mark">26</div>
+        <b>SF26 EnergyOS</b>
+        <span>Predictive Hybrid Energy Dashboard</span>
+      </div>
+      {_side_summary(lap_data, metrics, predictive_trace)}
+      <div class="side-block">
+        <span class="side-label">Veri kaynagi</span>
+        <span class="side-value">{escape(lap_data.source)}</span>
+        <p>{escape(lap_data.source_detail)}</p>
+      </div>
+    </aside>
+    <section class="content">
+      <div class="hero">
+        <div class="hero-main">
+          <span class="eyebrow">2026 ERS Simulasyonu</span>
+          <h1>Clipping riskini pist uzerinde okunur hale getir.</h1>
+          <p>Dashboard, sabit enerji haritasi ile ongorulu MPC benzeri stratejiyi ayni tur uzerinde karsilastirir. FastF1 verisi yoksa deterministik sentetik tur kullanilir; batarya, termal, aktif aero ve ERS sinyalleri model varsayimidir.</p>
+        </div>
+        <div class="hero-metrics">
+          {_kpi_cards(metrics, predictive_trace)}
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Pist Enerji Seridi</h2>
+        {_track_ribbon(base_frame)}
+      </div>
+
+      <div class="grid">
+        <div class="panel plot-panel">
+          <h2>Strateji Telemetrisi</h2>
+          {plot_html}
+        </div>
+        <div class="panel">
+          <h2>Surucu Komut Akisi</h2>
+          {_command_timeline(predictive_trace)}
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h2>Strateji Karsilastirmasi</h2>
+          {_format_metrics(metrics)}
+        </div>
+        <div class="panel">
+          <h2>Segment Ozeti</h2>
+          {_segment_summary(base_frame)}
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Varsayimlar ve Veri Sozlesmesi</h2>
+        <p>Bu prototip Ferrari telemetrisi veya gercek SF-26 parametresi kullanmaz. Ferrari/SF-26 ifadesi proje baglamidir.</p>
+        <p>Girdi kolonlari: {", ".join(f"<code>{col}</code>" for col in REQUIRED_INPUT_COLUMNS)}</p>
+        <p>Model kolonlari: {", ".join(f"<code>{col}</code>" for col in MODEL_COLUMNS)}</p>
+        <ul>{notes_html}</ul>
+        <p><a href="{config.reference_links[0]}">FIA Formula One regulations category</a> | <a href="{config.reference_links[1]}">FIA 2026 Technical Regulations Section C, Issue 18 PDF</a></p>
+      </div>
+    </section>
   </div>
-  {_summary_cards(metrics)}
-  <h2>Strategy Comparison</h2>
-  {metrics_html}
-  <h2>Telemetry and Energy Trace</h2>
-  {plot_html}
-  <h2>Segment Summary</h2>
-  {segment_html}
-  <h2>Data Source</h2>
-  <p><b>{escape(lap_data.source)}</b>: {escape(lap_data.source_detail)}</p>
-  <ul>{notes_html}</ul>
-  <h2>Data Contract</h2>
-  <p>Input columns: {", ".join(f"<code>{col}</code>" for col in REQUIRED_INPUT_COLUMNS)}</p>
-  <p>Model columns: {", ".join(f"<code>{col}</code>" for col in MODEL_COLUMNS)}</p>
-  <h2>Regulatory References</h2>
-  <ul>
-    <li><a href="{config.reference_links[0]}">FIA Formula One regulations category</a></li>
-    <li><a href="{config.reference_links[1]}">FIA 2026 Technical Regulations Section C, Issue 18 PDF</a></li>
-  </ul>
 </main>
 </body>
 </html>
@@ -167,57 +432,142 @@ def _build_strategy_figure(
     config: EnergyConfig,
 ) -> go.Figure:
     fig = make_subplots(
-        rows=6,
+        rows=5,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.035,
+        vertical_spacing=0.04,
         subplot_titles=(
-            "Speed",
-            "Driver Inputs",
-            "MGU-K Deploy / Regen",
+            "Hiz ve aktif aero",
+            "Deploy / recharge",
             "Energy Store SoC",
-            "Battery Temperature",
-            "Clipping Risk and Active Aero",
+            "Clipping riski",
+            "Batarya sicakligi",
         ),
     )
 
     x = predictive_trace["distance_m"]
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Speed km/h", line=dict(color="#2f6f9f")), row=1, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["throttle"], name="Throttle %", line=dict(color="#1f9d55")), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["brake"], name="Brake %", line=dict(color="#c0362c")), row=2, col=1)
-
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Fixed deploy kW", line=dict(color="#f59e0b")), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Predictive deploy kW", line=dict(color="#2563eb")), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=-fixed_trace["regen_kw"], name="Fixed regen kW", line=dict(color="#fbbf24", dash="dot")), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Predictive regen kW", line=dict(color="#60a5fa", dash="dot")), row=3, col=1)
-
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["soc_mj"], name="Fixed SoC MJ", line=dict(color="#92400e")), row=4, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Predictive SoC MJ", line=dict(color="#1d4ed8")), row=4, col=1)
-    fig.add_hline(y=config.minimum_soc_mj, row=4, col=1, line=dict(color="#b91c1c", dash="dash"))
-
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Fixed battery C", line=dict(color="#b45309")), row=5, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Predictive battery C", line=dict(color="#0f766e")), row=5, col=1)
-    fig.add_hline(y=config.battery_soft_limit_c, row=5, col=1, line=dict(color="#ea580c", dash="dash"))
-
     aero_numeric = predictive_trace["aero_mode"].map({"Z_MODE": 0, "X_MODE": 1})
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["clipping_risk"], name="Fixed clipping risk", line=dict(color="#dc2626")), row=6, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Predictive clipping risk", line=dict(color="#7c3aed")), row=6, col=1)
-    fig.add_trace(go.Scatter(x=x, y=aero_numeric, name="X_MODE active", line=dict(color="#111827", dash="dot")), row=6, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Hiz km/h", line=dict(color="#245f9f", width=2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=aero_numeric * 100, name="X_MODE x100", line=dict(color="#14171c", dash="dot")), row=1, col=1)
+
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Sabit deploy", line=dict(color="#bf7a00")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Predictive deploy", line=dict(color="#b5121b", width=2)), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=-fixed_trace["regen_kw"], name="Sabit recharge", line=dict(color="#d7a84c", dash="dot")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Predictive recharge", line=dict(color="#007a7a", dash="dot")), row=2, col=1)
+
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["soc_mj"], name="Sabit SoC", line=dict(color="#8a5a00")), row=3, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Predictive SoC", line=dict(color="#b5121b", width=2)), row=3, col=1)
+    fig.add_hline(y=config.minimum_soc_mj, row=3, col=1, line=dict(color="#7f0c14", dash="dash"))
+
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["clipping_risk"], name="Sabit risk", line=dict(color="#e05260")), row=4, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Predictive risk", line=dict(color="#007a7a", width=2)), row=4, col=1)
+
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Sabit batarya C", line=dict(color="#bf7a00")), row=5, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Predictive batarya C", line=dict(color="#2f7d4f", width=2)), row=5, col=1)
+    fig.add_hline(y=config.battery_soft_limit_c, row=5, col=1, line=dict(color="#b5121b", dash="dash"))
 
     fig.update_yaxes(title_text="km/h", row=1, col=1)
-    fig.update_yaxes(title_text="%", row=2, col=1)
-    fig.update_yaxes(title_text="kW", row=3, col=1)
-    fig.update_yaxes(title_text="MJ", row=4, col=1)
+    fig.update_yaxes(title_text="kW", row=2, col=1)
+    fig.update_yaxes(title_text="MJ", row=3, col=1)
+    fig.update_yaxes(title_text="risk", row=4, col=1, range=[-0.05, 1.05])
     fig.update_yaxes(title_text="C", row=5, col=1)
-    fig.update_yaxes(title_text="risk", row=6, col=1, range=[-0.05, 1.05])
-    fig.update_xaxes(title_text="Distance (m)", row=6, col=1)
+    fig.update_xaxes(title_text="Mesafe (m)", row=5, col=1)
     fig.update_layout(
-        height=1180,
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0),
-        margin=dict(l=50, r=28, t=90, b=45),
+        height=920,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=52, r=24, t=76, b=44),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#fbfcfb",
         template="plotly_white",
+        font=dict(family="Avenir Next, Segoe UI, sans-serif", size=12, color="#14171c"),
     )
     return fig
+
+
+def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
+    fixed = _metric(metrics, "fixed_map")
+    predictive = _metric(metrics, "predictive_mpc")
+    lap_delta = fixed["lap_time_proxy_s"] - predictive["lap_time_proxy_s"]
+    risk_peak = predictive_trace["clipping_risk"].max()
+    return f"""
+      <div class="side-block">
+        <span class="side-label">Lap proxy kazanci</span>
+        <span class="side-value">{lap_delta:.3f} s</span>
+      </div>
+      <div class="side-block">
+        <span class="side-label">Predictive clipping</span>
+        <span class="side-value">{predictive["clipping_duration_s"]:.3f} s</span>
+      </div>
+      <div class="side-block">
+        <span class="side-label">Peak risk</span>
+        <span class="side-value">{risk_peak:.2f}</span>
+      </div>
+"""
+
+
+def _kpi_cards(metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
+    fixed = _metric(metrics, "fixed_map")
+    predictive = _metric(metrics, "predictive_mpc")
+    lap_delta = fixed["lap_time_proxy_s"] - predictive["lap_time_proxy_s"]
+    clipping_delta = fixed["clipping_duration_s"] - predictive["clipping_duration_s"]
+    soc_pct = predictive["end_soc_mj"] / 4.0 * 100.0
+    attack_count = int(predictive_trace["driver_command"].isin(["DEPLOY ATTACK", "OVERTAKE READY"]).sum())
+    return f"""
+          <div class="metric"><span>Lap proxy iyilesme</span><b>{lap_delta:.3f}s</b><small>Sabit haritaya gore</small></div>
+          <div class="metric"><span>Clipping azalimi</span><b>{clipping_delta:.1f}s</b><small>Predictive strateji</small></div>
+          <div class="metric"><span>Final SoC</span><b>{soc_pct:.1f}%</b><small>{predictive["end_soc_mj"]:.3f} MJ</small></div>
+          <div class="metric"><span>Atak hazirligi</span><b>{attack_count}</b><small>Deploy komut noktasi</small></div>
+"""
+
+
+def _track_ribbon(frame: pd.DataFrame) -> str:
+    colors = {
+        "straight": "#245f9f",
+        "acceleration": "#2f7d4f",
+        "braking": "#b5121b",
+        "slow_corner": "#bf7a00",
+        "fast_corner": "#007a7a",
+    }
+    labels = {
+        "straight": "Duzluk",
+        "acceleration": "Hizlanma",
+        "braking": "Fren",
+        "slow_corner": "Yavas viraj",
+        "fast_corner": "Hizli viraj",
+    }
+    total = max(float(frame["ds_m"].sum()), 1.0)
+    chunks = []
+    token = frame["segment_type"].ne(frame["segment_type"].shift()).cumsum()
+    for _, group in frame.groupby(token):
+        segment = str(group["segment_type"].iloc[0])
+        width = float(group["ds_m"].sum()) / total * 100.0
+        chunks.append(
+            f'<span title="{escape(labels.get(segment, segment))}: {group["ds_m"].sum():.0f} m" '
+            f'style="width:{width:.3f}%; background:{colors.get(segment, "#66717d")};"></span>'
+        )
+    legend = "".join(
+        f'<span><i style="background:{color}"></i>{escape(labels[key])}</span>' for key, color in colors.items()
+    )
+    return f'<div class="track">{"".join(chunks)}</div><div class="legend">{legend}</div>'
+
+
+def _command_timeline(trace: pd.DataFrame) -> str:
+    changes = trace[trace["driver_command"].ne(trace["driver_command"].shift())].copy()
+    changes = changes[["time_s", "distance_m", "driver_command", "clipping_risk", "soc_mj"]].head(22)
+    cards = []
+    for _, row in changes.iterrows():
+        cards.append(
+            f"""
+            <div class="command">
+              <time>{row["time_s"]:.1f}s<br>{row["distance_m"]:.0f}m</time>
+              <div>
+                <span class="pill">{escape(str(row["driver_command"]))}</span>
+                <b>Risk {row["clipping_risk"]:.2f} | SoC {row["soc_mj"]:.2f} MJ</b>
+              </div>
+            </div>
+"""
+        )
+    return f'<div class="command-list">{"".join(cards)}</div>'
 
 
 def _format_metrics(metrics: pd.DataFrame) -> str:
@@ -232,9 +582,22 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
         "total_deploy_mj",
         "total_regen_mj",
     ]
+    labels = {
+        "strategy": "Strateji",
+        "lap_time_proxy_s": "Lap proxy (s)",
+        "clipping_duration_s": "Clipping (s)",
+        "max_speed_loss_kmh": "Max hiz kaybi",
+        "end_soc_mj": "Final SoC",
+        "unused_energy_mj": "Kalan enerji",
+        "max_battery_temp_c": "Max batarya C",
+        "total_deploy_mj": "Deploy MJ",
+        "total_regen_mj": "Regen MJ",
+    }
     table = metrics[columns].copy()
+    table["strategy"] = table["strategy"].replace({"fixed_map": "Sabit harita", "predictive_mpc": "Predictive MPC"})
     numeric_cols = table.select_dtypes("number").columns
     table[numeric_cols] = table[numeric_cols].round(3)
+    table = table.rename(columns=labels)
     return table.to_html(index=False, escape=True)
 
 
@@ -247,19 +610,17 @@ def _segment_summary(frame: pd.DataFrame) -> str:
     grouped[["distance_m", "duration_s", "mean_speed_kmh"]] = grouped[
         ["distance_m", "duration_s", "mean_speed_kmh"]
     ].round(2)
+    grouped = grouped.rename(
+        columns={
+            "segment_type": "Segment",
+            "aero_mode": "Aero",
+            "distance_m": "Mesafe",
+            "duration_s": "Sure",
+            "mean_speed_kmh": "Ort hiz",
+        }
+    )
     return grouped.to_html(index=False, escape=True)
 
 
-def _summary_cards(metrics: pd.DataFrame) -> str:
-    fixed = metrics[metrics["strategy"] == "fixed_map"].iloc[0]
-    predictive = metrics[metrics["strategy"] == "predictive_mpc"].iloc[0]
-    clipping_delta = fixed["clipping_duration_s"] - predictive["clipping_duration_s"]
-    lap_delta = fixed["lap_time_proxy_s"] - predictive["lap_time_proxy_s"]
-    risk_delta = fixed["max_clipping_risk"] - predictive["max_clipping_risk"]
-    return f"""
-  <div class="summary">
-    <div class="stat">Lap proxy improvement<b>{lap_delta:.3f} s</b></div>
-    <div class="stat">Clipping reduction<b>{clipping_delta:.3f} s</b></div>
-    <div class="stat">Max risk reduction<b>{risk_delta:.3f}</b></div>
-  </div>
-"""
+def _metric(metrics: pd.DataFrame, strategy: str) -> pd.Series:
+    return metrics[metrics["strategy"] == strategy].iloc[0]

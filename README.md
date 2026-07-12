@@ -18,6 +18,12 @@ Offline deterministic demo:
 python -m sf26_energyos --synthetic-only --output outputs/report.html
 ```
 
+Dashboard UI output:
+
+```bash
+python -m sf26_energyos --synthetic-only --output outputs/dashboard.html
+```
+
 Outputs:
 
 - `outputs/report.html`: self-contained Plotly HTML report

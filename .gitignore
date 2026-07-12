@@ -5,10 +5,11 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Local analysis caches
-work/fastf1-cache/
+# Local analysis and QA artifacts
+work/
 
 # Generated deliverables; remove these lines if you want reports versioned too.
 outputs/report.html
+outputs/dashboard.html
 outputs/metrics.csv
 outputs/strategy_trace.csv
