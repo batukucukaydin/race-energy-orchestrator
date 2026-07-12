@@ -1,5 +1,5 @@
 {
   "project_id": "appgprj_6a5357da9a6c8191b16ff4f77cb9398f",
-  "build_command": "./scripts/build-dashboard.sh",
-  "output_dir": "docs"
+  "build_command": "npm run build",
+  "output_dir": "dist"
 }

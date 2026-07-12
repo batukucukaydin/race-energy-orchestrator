@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "./scripts/build-dashboard.sh"
+    "build": "mkdir -p dist && cp -R docs/. dist/"
   }
 }
