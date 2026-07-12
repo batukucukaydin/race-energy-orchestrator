@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sf26_energyos.cli import main
-from sf26_energyos.config import EnergyConfig
-from sf26_energyos.data import generate_synthetic_lap
-from sf26_energyos.metrics import metrics_frame
-from sf26_energyos.model import simulate_strategy
-from sf26_energyos.segmentation import add_track_features
+from race_energy_orchestrator.cli import main
+from race_energy_orchestrator.config import EnergyConfig
+from race_energy_orchestrator.data import generate_synthetic_lap
+from race_energy_orchestrator.metrics import metrics_frame
+from race_energy_orchestrator.model import simulate_strategy
+from race_energy_orchestrator.segmentation import add_track_features
 
 
 def _synthetic_featured(config: EnergyConfig | None = None) -> pd.DataFrame:

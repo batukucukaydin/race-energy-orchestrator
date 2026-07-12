@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sf26-energyos"
+name = "race-energy-orchestrator"
 version = "0.1.0"
-description = "Predictive 2026 Formula 1 hybrid energy management and clipping prevention prototype."
+description = "Predictive hybrid race vehicle energy management and clipping prevention dashboard."
 requires-python = ">=3.10"
 dependencies = [
   "fastf1>=3.0",
@@ -18,7 +18,7 @@ dependencies = [
 test = ["pytest>=8.0"]
 
 [project.scripts]
-sf26-energyos = "sf26_energyos.cli:main"
+race-energy-orchestrator = "race_energy_orchestrator.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

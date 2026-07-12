@@ -1,33 +1,33 @@
-# SF26 EnergyOS Prototype
+# Race Energy Orchestrator
 
-Predictive hybrid energy-management and clipping-prevention prototype for a 2026-style Formula 1 car. It uses public FastF1 lap telemetry when available and overlays synthetic 2026 ERS, battery, thermal, active aero, and strategy signals. If FastF1 data is unavailable, the same CLI falls back to a deterministic synthetic Monza-like lap.
+Predictive hybrid race-vehicle energy management and clipping-prevention prototype. It uses public FastF1 lap telemetry when available and overlays configurable synthetic ERS, battery, thermal, active aero, and strategy signals. If FastF1 data is unavailable, the same CLI falls back to a deterministic Monza-like demo lap.
 
-This is not Ferrari telemetry and does not claim real SF-26 parameters. Ferrari/SF-26 is treated as the concept context from the brief.
+The project is intentionally team-neutral and vehicle-neutral. Its default configuration uses a 2026-style formula-car regulation profile as an example, not a real team, driver, or car dataset.
 
 ## Run
 
 From this folder:
 
 ```bash
-python -m sf26_energyos --year 2024 --event Monza --session Q --driver LEC --output outputs/report.html
+python -m race_energy_orchestrator --year 2024 --event Monza --session Q --driver LEC --output outputs/report.html
 ```
 
 Offline deterministic demo:
 
 ```bash
-python -m sf26_energyos --synthetic-only --output outputs/report.html
+python -m race_energy_orchestrator --synthetic-only --output outputs/report.html
 ```
 
 Dashboard UI output:
 
 ```bash
-python -m sf26_energyos --synthetic-only --output outputs/dashboard.html
+python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.html
 ```
 
 Deploy-ready static output:
 
 ```bash
-python -m sf26_energyos --synthetic-only --output docs/index.html
+python -m race_energy_orchestrator --synthetic-only --output docs/index.html
 python -m http.server 8000 --directory docs
 ```
 
@@ -44,7 +44,7 @@ Outputs:
 
 - FIA 2026 Formula One regulations category: https://www.fia.com/regulation/category/110
 - FIA 2026 Technical Regulations Section C, Issue 18: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_18_-_2026-05-07.pdf
-- The prototype uses a configurable MGU-K deploy cap of 350 kW and explicitly synthetic battery/thermal/ERS assumptions.
+- The default profile uses a configurable MGU-K deploy cap of 350 kW and explicitly synthetic battery/thermal/ERS assumptions.
 
 ## Test
 
@@ -52,19 +52,19 @@ Outputs:
 python -m pytest
 ```
 
-## Git Sync
-
-Initialize and use the local repository:
+## Build
 
 ```bash
-git init -b main
-git add .
-git commit -m "Initial commit"
+./scripts/build-dashboard.sh
+npm run build
 ```
+
+## Git Sync
 
 Create a private GitHub repo first, then connect it:
 
 ```bash
+git remote remove origin
 git remote add origin https://github.com/<USERNAME>/<PRIVATE_REPO>.git
 git push -u origin main
 ```
