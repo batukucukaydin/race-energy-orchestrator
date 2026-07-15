@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -27,12 +28,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--trace-output", default=None)
     parser.add_argument("--cache-dir", default="work/fastf1-cache")
     parser.add_argument("--synthetic-only", action="store_true", help="Skip FastF1 and use deterministic demo data.")
+    parser.add_argument("--ambient-temp-c", type=float, default=None, help="Override ambient temperature for scenario runs.")
+    parser.add_argument("--initial-soc-mj", type=float, default=None, help="Override starting Energy Store state in MJ.")
+    parser.add_argument(
+        "--initial-battery-temp-c",
+        type=float,
+        default=None,
+        help="Override starting battery temperature in Celsius.",
+    )
+    parser.add_argument("--horizon-s", type=float, default=None, help="Override predictive strategy lookahead horizon.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = EnergyConfig()
+    config = _config_from_args(args)
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -65,3 +75,19 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Trace: {trace_output}")
     print(f"Data source: {lap_data.source} - {lap_data.source_detail}")
     return 0
+
+
+def _config_from_args(args: argparse.Namespace) -> EnergyConfig:
+    config = EnergyConfig()
+    overrides = {}
+    if args.ambient_temp_c is not None:
+        overrides["ambient_temp_c"] = args.ambient_temp_c
+    if args.initial_soc_mj is not None:
+        overrides["initial_soc_mj"] = args.initial_soc_mj
+    if args.initial_battery_temp_c is not None:
+        overrides["initial_battery_temp_c"] = args.initial_battery_temp_c
+    if args.horizon_s is not None:
+        overrides["horizon_s"] = args.horizon_s
+    if overrides:
+        config = replace(config, **overrides)
+    return config

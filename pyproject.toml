@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "race-energy-orchestrator"
 version = "0.1.0"
-description = "Predictive hybrid race vehicle energy management and clipping prevention dashboard."
+description = "Predictive hybrid race-vehicle energy orchestration and clipping-prevention dashboard."
 requires-python = ">=3.10"
 dependencies = [
   "fastf1>=3.0",

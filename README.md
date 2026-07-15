@@ -24,6 +24,12 @@ Dashboard UI output:
 python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.html
 ```
 
+Scenario run with hotter ambient conditions and a lower starting battery state:
+
+```bash
+python -m race_energy_orchestrator --synthetic-only --ambient-temp-c 34 --initial-soc-mj 2.6 --initial-battery-temp-c 52 --horizon-s 38 --output outputs/hot_scenario.html
+```
+
 Deploy-ready static output:
 
 ```bash
@@ -59,26 +65,3 @@ python -m pytest
 npm run build
 ```
 
-## Git Sync
-
-Create a private GitHub repo first, then connect it:
-
-```bash
-git remote remove origin
-git remote add origin https://github.com/<USERNAME>/<PRIVATE_REPO>.git
-git push -u origin main
-```
-
-Manual sync:
-
-```bash
-./scripts/git-sync-once.sh
-```
-
-Continuous auto-sync loop:
-
-```bash
-./scripts/git-auto-sync.sh
-```
-
-The auto-sync loop polls every 8 seconds by default and commits with an `autosync:` timestamp message whenever tracked files change.

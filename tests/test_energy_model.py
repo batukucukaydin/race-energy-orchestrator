@@ -65,6 +65,7 @@ def test_metrics_are_deterministic() -> None:
     )
 
     pd.testing.assert_frame_equal(first, second)
+    assert {"thermal_limited_duration_s", "energy_utilization_pct", "clipping_control_score"}.issubset(first.columns)
 
 
 def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
@@ -88,3 +89,32 @@ def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
     assert report.exists() and report.stat().st_size > 1000
     assert metrics.exists()
     assert trace.exists()
+    assert "Race Energy Orchestrator" in report.read_text(encoding="utf-8")
+
+
+def test_cli_scenario_overrides_are_reflected_in_report(tmp_path) -> None:
+    report = tmp_path / "hot_scenario.html"
+    metrics = tmp_path / "metrics.csv"
+
+    result = main(
+        [
+            "--synthetic-only",
+            "--ambient-temp-c",
+            "34",
+            "--initial-soc-mj",
+            "2.6",
+            "--initial-battery-temp-c",
+            "52",
+            "--horizon-s",
+            "38",
+            "--output",
+            str(report),
+            "--metrics-output",
+            str(metrics),
+        ]
+    )
+
+    assert result == 0
+    html = report.read_text(encoding="utf-8")
+    assert "ortam 34.0C" in html
+    assert "baslangic SoC 2.60 MJ" in html

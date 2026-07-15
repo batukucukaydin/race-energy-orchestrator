@@ -215,6 +215,34 @@ def render_report(
       margin-top: 8px;
       color: var(--muted);
     }}
+    .insight-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .insight {{
+      display: grid;
+      gap: 8px;
+      min-height: 122px;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fbfcfb;
+    }}
+    .insight span {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }}
+    .insight b {{
+      font-size: 25px;
+      line-height: 1;
+    }}
+    .insight p {{
+      margin: 0;
+      font-size: 13px;
+    }}
     .grid {{
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
@@ -344,6 +372,7 @@ def render_report(
     @media (max-width: 680px) {{
       main {{ width: min(100vw - 20px, 1440px); padding-top: 10px; }}
       .hero-metrics {{ grid-template-columns: 1fr; }}
+      .insight-grid {{ grid-template-columns: 1fr; }}
       .metric {{ min-height: 104px; }}
       .command {{ grid-template-columns: 1fr; }}
       .hero-main {{ min-height: 260px; padding: 26px 18px; }}
@@ -358,9 +387,9 @@ def render_report(
   <div class="shell">
     <aside>
       <div class="brand">
-        <div class="mark">RE</div>
+        <div class="mark">REO</div>
         <b>Race Energy Orchestrator</b>
-        <span>Predictive Hybrid Energy Dashboard</span>
+        <span>Predictive race energy control</span>
       </div>
       {_side_summary(lap_data, metrics, predictive_trace)}
       <div class="side-block">
@@ -372,13 +401,18 @@ def render_report(
     <section class="content">
       <div class="hero">
         <div class="hero-main">
-          <span class="eyebrow">Hybrid Energy Simulation</span>
-          <h1>Clipping riskini pist uzerinde okunur hale getir.</h1>
-          <p>Dashboard, sabit enerji haritasi ile ongorulu MPC benzeri stratejiyi ayni tur uzerinde karsilastirir. FastF1 verisi yoksa deterministik sentetik tur kullanilir; batarya, termal, aktif aero ve ERS sinyalleri genel model varsayimidir.</p>
+          <span class="eyebrow">Race Energy Orchestrator</span>
+          <h1>Enerji kararlarini clipping olusmadan orkestre et.</h1>
+          <p>Dashboard, sabit enerji haritasi ile ongorulu orkestrasyon stratejisini ayni tur uzerinde karsilastirir. FastF1 verisi yoksa deterministik sentetik tur kullanilir; batarya, termal, aktif aero ve ERS sinyalleri genel model varsayimidir.</p>
         </div>
         <div class="hero-metrics">
           {_kpi_cards(metrics, predictive_trace)}
         </div>
+      </div>
+
+      <div class="panel">
+        <h2>Orchestrator Insight</h2>
+        {_orchestrator_insights(metrics, predictive_trace, config)}
       </div>
 
       <div class="panel">
@@ -411,6 +445,7 @@ def render_report(
       <div class="panel">
         <h2>Varsayimlar ve Veri Sozlesmesi</h2>
         <p>Bu prototip takim ozel telemetri veya gercek arac parametresi kullanmaz. Varsayimlar genel hibrit yaris araci enerji yonetimi modelini gostermek icindir.</p>
+        <p>Senaryo: ortam {config.ambient_temp_c:.1f}C, baslangic SoC {config.initial_soc_mj:.2f} MJ, baslangic batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.</p>
         <p>Girdi kolonlari: {", ".join(f"<code>{col}</code>" for col in REQUIRED_INPUT_COLUMNS)}</p>
         <p>Model kolonlari: {", ".join(f"<code>{col}</code>" for col in MODEL_COLUMNS)}</p>
         <ul>{notes_html}</ul>
@@ -451,19 +486,19 @@ def _build_strategy_figure(
     fig.add_trace(go.Scatter(x=x, y=aero_numeric * 100, name="X_MODE x100", line=dict(color="#14171c", dash="dot")), row=1, col=1)
 
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Sabit deploy", line=dict(color="#bf7a00")), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Predictive deploy", line=dict(color="#b5121b", width=2)), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Orchestrator deploy", line=dict(color="#b5121b", width=2)), row=2, col=1)
     fig.add_trace(go.Scatter(x=x, y=-fixed_trace["regen_kw"], name="Sabit recharge", line=dict(color="#d7a84c", dash="dot")), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Predictive recharge", line=dict(color="#007a7a", dash="dot")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Orchestrator recharge", line=dict(color="#007a7a", dash="dot")), row=2, col=1)
 
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["soc_mj"], name="Sabit SoC", line=dict(color="#8a5a00")), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Predictive SoC", line=dict(color="#b5121b", width=2)), row=3, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Orchestrator SoC", line=dict(color="#b5121b", width=2)), row=3, col=1)
     fig.add_hline(y=config.minimum_soc_mj, row=3, col=1, line=dict(color="#7f0c14", dash="dash"))
 
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["clipping_risk"], name="Sabit risk", line=dict(color="#e05260")), row=4, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Predictive risk", line=dict(color="#007a7a", width=2)), row=4, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Orchestrator risk", line=dict(color="#007a7a", width=2)), row=4, col=1)
 
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Sabit batarya C", line=dict(color="#bf7a00")), row=5, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Predictive batarya C", line=dict(color="#2f7d4f", width=2)), row=5, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Orchestrator batarya C", line=dict(color="#2f7d4f", width=2)), row=5, col=1)
     fig.add_hline(y=config.battery_soft_limit_c, row=5, col=1, line=dict(color="#b5121b", dash="dash"))
 
     fig.update_yaxes(title_text="km/h", row=1, col=1)
@@ -495,7 +530,7 @@ def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd
         <span class="side-value">{lap_delta:.3f} s</span>
       </div>
       <div class="side-block">
-        <span class="side-label">Predictive clipping</span>
+        <span class="side-label">Orchestrator clipping</span>
         <span class="side-value">{predictive["clipping_duration_s"]:.3f} s</span>
       </div>
       <div class="side-block">
@@ -514,9 +549,65 @@ def _kpi_cards(metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
     attack_count = int(predictive_trace["driver_command"].isin(["DEPLOY ATTACK", "OVERTAKE READY"]).sum())
     return f"""
           <div class="metric"><span>Lap proxy iyilesme</span><b>{lap_delta:.3f}s</b><small>Sabit haritaya gore</small></div>
-          <div class="metric"><span>Clipping azalimi</span><b>{clipping_delta:.1f}s</b><small>Predictive strateji</small></div>
+          <div class="metric"><span>Clipping azalimi</span><b>{clipping_delta:.1f}s</b><small>Orchestrator stratejisi</small></div>
           <div class="metric"><span>Final SoC</span><b>{soc_pct:.1f}%</b><small>{predictive["end_soc_mj"]:.3f} MJ</small></div>
           <div class="metric"><span>Atak hazirligi</span><b>{attack_count}</b><small>Deploy komut noktasi</small></div>
+"""
+
+
+def _orchestrator_insights(metrics: pd.DataFrame, predictive_trace: pd.DataFrame, config: EnergyConfig) -> str:
+    fixed = _metric(metrics, "fixed_map")
+    predictive = _metric(metrics, "predictive_mpc")
+    lap_delta = fixed["lap_time_proxy_s"] - predictive["lap_time_proxy_s"]
+    clipping_delta = fixed["clipping_duration_s"] - predictive["clipping_duration_s"]
+    thermal_headroom = config.battery_soft_limit_c - predictive["max_battery_temp_c"]
+    command_counts = predictive_trace["driver_command"].value_counts()
+    top_command = str(command_counts.index[0]) if not command_counts.empty else "ENERGY HOLD"
+    top_command_share = float(command_counts.iloc[0] / max(len(predictive_trace), 1) * 100.0) if not command_counts.empty else 0.0
+    risk_state = "Kontrol altinda" if predictive["clipping_duration_s"] <= 0.05 else "Risk izlenmeli"
+    return f"""
+      <div class="insight-grid">
+        <div class="insight">
+          <span>Orkestrasyon kazanci</span>
+          <b>{lap_delta:.3f}s</b>
+          <p>Sabit haritaya karsi lap proxy iyilesmesi.</p>
+        </div>
+        <div class="insight">
+          <span>Clipping kontrolu</span>
+          <b>{risk_state}</b>
+          <p>{clipping_delta:.2f}s clipping suresi temizlendi.</p>
+        </div>
+        <div class="insight">
+          <span>Enerji kullanimi</span>
+          <b>{predictive["energy_utilization_pct"]:.1f}%</b>
+          <p>{predictive["total_deploy_mj"]:.2f} MJ deploy, {predictive["total_regen_mj"]:.2f} MJ regen.</p>
+        </div>
+        <div class="insight">
+          <span>Karar modu</span>
+          <b>{escape(top_command)}</b>
+          <p>Tur orneklerinin {top_command_share:.1f}% bolumunde baskin komut.</p>
+        </div>
+        <div class="insight">
+          <span>Termal pay</span>
+          <b>{thermal_headroom:.1f}C</b>
+          <p>Soft limite gore kalan batarya sicaklik alani.</p>
+        </div>
+        <div class="insight">
+          <span>Kontrol skoru</span>
+          <b>{predictive["clipping_control_score"]:.1f}</b>
+          <p>Clipping ve termal limit surelerinden turetilen karar kalitesi.</p>
+        </div>
+        <div class="insight">
+          <span>Lookahead</span>
+          <b>{config.horizon_s:.0f}s</b>
+          <p>Yaklasan uzun duzlukler icin enerji rezerv ufku.</p>
+        </div>
+        <div class="insight">
+          <span>Final SoC</span>
+          <b>{predictive["end_soc_mj"]:.2f} MJ</b>
+          <p>Hedef finish rezervi {config.target_finish_soc_mj:.2f} MJ.</p>
+        </div>
+      </div>
 """
 
 
@@ -575,26 +666,34 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
         "strategy",
         "lap_time_proxy_s",
         "clipping_duration_s",
+        "thermal_limited_duration_s",
         "max_speed_loss_kmh",
         "end_soc_mj",
         "unused_energy_mj",
         "max_battery_temp_c",
         "total_deploy_mj",
         "total_regen_mj",
+        "energy_utilization_pct",
+        "clipping_control_score",
     ]
     labels = {
         "strategy": "Strateji",
         "lap_time_proxy_s": "Lap proxy (s)",
         "clipping_duration_s": "Clipping (s)",
+        "thermal_limited_duration_s": "Termal limit (s)",
         "max_speed_loss_kmh": "Max hiz kaybi",
         "end_soc_mj": "Final SoC",
         "unused_energy_mj": "Kalan enerji",
         "max_battery_temp_c": "Max batarya C",
         "total_deploy_mj": "Deploy MJ",
         "total_regen_mj": "Regen MJ",
+        "energy_utilization_pct": "Enerji kull. %",
+        "clipping_control_score": "Kontrol skoru",
     }
     table = metrics[columns].copy()
-    table["strategy"] = table["strategy"].replace({"fixed_map": "Sabit harita", "predictive_mpc": "Predictive MPC"})
+    table["strategy"] = table["strategy"].replace(
+        {"fixed_map": "Sabit harita", "predictive_mpc": "Orchestrator"}
+    )
     numeric_cols = table.select_dtypes("number").columns
     table[numeric_cols] = table[numeric_cols].round(3)
     table = table.rename(columns=labels)
