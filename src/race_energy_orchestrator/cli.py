@@ -53,8 +53,8 @@ def main(argv: list[str] | None = None) -> int:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_output = Path(args.metrics_output) if args.metrics_output else output_path.parent / "metrics.csv"
-    trace_output = Path(args.trace_output) if args.trace_output else output_path.parent / "strategy_trace.csv"
+    metrics_output = Path(args.metrics_output) if args.metrics_output else None
+    trace_output = Path(args.trace_output) if args.trace_output else None
 
     lap_data = load_lap_data(
         year=args.year,
@@ -74,19 +74,24 @@ def main(argv: list[str] | None = None) -> int:
     comparison_output = None
     if args.compare_scenarios:
         comparison = compare_scenarios(lap_data.frame, config)
-        comparison_output = Path(args.comparison_output) if args.comparison_output else output_path.parent / "scenario_comparison.csv"
+        comparison_output = Path(args.comparison_output) if args.comparison_output else None
+    if comparison_output is not None:
         comparison_output.parent.mkdir(parents=True, exist_ok=True)
         comparison.to_csv(comparison_output, index=False)
 
-    metrics_output.parent.mkdir(parents=True, exist_ok=True)
-    trace_output.parent.mkdir(parents=True, exist_ok=True)
-    metrics.to_csv(metrics_output, index=False)
-    combined_trace.to_csv(trace_output, index=False)
+    if metrics_output is not None:
+        metrics_output.parent.mkdir(parents=True, exist_ok=True)
+        metrics.to_csv(metrics_output, index=False)
+    if trace_output is not None:
+        trace_output.parent.mkdir(parents=True, exist_ok=True)
+        combined_trace.to_csv(trace_output, index=False)
     render_report(lap_data, featured, fixed, predictive, metrics, config, output_path, comparison)
 
     print(f"Report: {output_path}")
-    print(f"Metrics: {metrics_output}")
-    print(f"Trace: {trace_output}")
+    if metrics_output is not None:
+        print(f"Metrics: {metrics_output}")
+    if trace_output is not None:
+        print(f"Trace: {trace_output}")
     if comparison_output is not None:
         print(f"Scenario comparison: {comparison_output}")
     print(f"Data source: {lap_data.source} - {lap_data.source_detail}")

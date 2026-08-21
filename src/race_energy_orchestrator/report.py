@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from html import escape
 from pathlib import Path
 
@@ -244,6 +245,52 @@ def render_report(
       margin: 0;
       font-size: 13px;
     }}
+    .explorer-heading, .explorer-footer {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }}
+    .explorer-heading p {{ margin: 0; }}
+    .explorer-controls {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 10px;
+      margin: 14px 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f7f9f7;
+    }}
+    .explorer-controls label {{
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }}
+    .explorer-controls input[type="search"], .explorer-controls select, .explorer-controls button {{
+      min-height: 34px;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }}
+    .explorer-controls input[type="search"] {{ min-width: 230px; }}
+    .explorer-controls button {{ cursor: pointer; font-weight: 700; }}
+    .check-label {{ display: flex !important; align-items: center; min-height: 34px; }}
+    .explorer-table-wrap {{ overflow-x: auto; max-height: 520px; border: 1px solid var(--line); border-radius: 6px; }}
+    .explorer-table-wrap table {{ min-width: 980px; }}
+    .explorer-table-wrap thead {{ position: sticky; top: 0; z-index: 1; }}
+    .explorer-table-wrap td {{ white-space: nowrap; }}
+    .incident-row td {{ color: var(--red-deep); background: #fff8f6; }}
+    .explorer-footer {{ padding-top: 12px; color: var(--muted); font-size: 12px; }}
+    .explorer-pages {{ display: flex; gap: 8px; }}
+    .explorer-pages button {{ padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: white; cursor: pointer; }}
+    .explorer-pages button:disabled {{ cursor: default; opacity: 0.45; }}
     .grid {{
       display: grid;
       grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
@@ -379,6 +426,9 @@ def render_report(
       .hero-metrics {{ grid-template-columns: 1fr; }}
       .insight-grid {{ grid-template-columns: 1fr; }}
       .metric {{ min-height: 104px; }}
+      .explorer-heading {{ align-items: start; flex-direction: column; }}
+      .explorer-controls {{ align-items: stretch; flex-direction: column; }}
+      .explorer-controls input[type="search"] {{ min-width: 0; width: 100%; }}
       .command {{ grid-template-columns: 1fr; }}
       .hero-main {{ min-height: 260px; padding: 26px 18px; }}
       h1 {{ max-width: min(320px, calc(100vw - 76px)); font-size: 34px; line-height: 1.02; }}
@@ -419,6 +469,8 @@ def render_report(
         <h2>Orchestrator Insight</h2>
         {_orchestrator_insights(metrics, predictive_trace, config)}
       </div>
+
+      {_data_explorer_panel(fixed_trace, predictive_trace)}
 
       {_scenario_comparison_panel(scenario_comparison)}
 
@@ -576,6 +628,106 @@ def _scenario_comparison_panel(comparison: pd.DataFrame | None) -> str:
           </table>
         </div>
       </div>
+"""
+
+
+def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
+    columns = [
+        "time_s",
+        "distance_m",
+        "segment_type",
+        "driver_command",
+        "deploy_kw",
+        "regen_kw",
+        "soc_mj",
+        "battery_temp_c",
+        "clipping_risk",
+        "clipping",
+        "thermal_limited",
+    ]
+    records = []
+    for strategy, trace in (("fixed_map", fixed_trace), ("predictive_mpc", predictive_trace)):
+        frame = trace[columns].copy()
+        frame["strategy"] = strategy
+        records.extend(frame.to_dict(orient="records"))
+    payload = json.dumps(records, ensure_ascii=True, allow_nan=False)
+    return f"""
+      <div class="panel data-explorer">
+        <div class="explorer-heading">
+          <div>
+            <h2>Telemetry Data Explorer</h2>
+            <p>Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.</p>
+          </div>
+          <span class="pill" id="reo-row-count">0 kayıt</span>
+        </div>
+        <div class="explorer-controls">
+          <label>Strateji
+            <select id="reo-strategy-filter">
+              <option value="all">Tümü</option>
+              <option value="predictive_mpc">Orchestrator</option>
+              <option value="fixed_map">Sabit harita</option>
+            </select>
+          </label>
+          <label>Arama
+            <input id="reo-text-filter" type="search" placeholder="komut, segment veya değer ara">
+          </label>
+          <label class="check-label"><input id="reo-clipping-filter" type="checkbox"> Clipping / termal limit</label>
+          <button id="reo-reset-filter" type="button">Filtreleri temizle</button>
+        </div>
+        <div class="explorer-table-wrap">
+          <table>
+            <thead><tr><th>Strateji</th><th>Zaman</th><th>Mesafe</th><th>Segment</th><th>Komut</th><th>Deploy</th><th>Regen</th><th>SoC</th><th>Batarya</th><th>Risk</th><th>Durum</th></tr></thead>
+            <tbody id="reo-data-body"></tbody>
+          </table>
+        </div>
+        <div class="explorer-footer">
+          <span id="reo-page-label">Sayfa 1</span>
+          <div class="explorer-pages"><button id="reo-prev-page" type="button">Onceki</button><button id="reo-next-page" type="button">Sonraki</button></div>
+        </div>
+      </div>
+      <script>
+        (() => {{
+          const allRows = {payload};
+          const pageSize = 18;
+          let page = 0;
+          const strategy = document.getElementById('reo-strategy-filter');
+          const text = document.getElementById('reo-text-filter');
+          const incidents = document.getElementById('reo-clipping-filter');
+          const body = document.getElementById('reo-data-body');
+          const count = document.getElementById('reo-row-count');
+          const pageLabel = document.getElementById('reo-page-label');
+          const esc = value => String(value).replace(/[&<>\"']/g, char => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}}[char]));
+          const filteredRows = () => {{
+            const query = text.value.trim().toLowerCase();
+            return allRows.filter(row => {{
+              const matchStrategy = strategy.value === 'all' || row.strategy === strategy.value;
+              const matchQuery = !query || Object.values(row).some(value => String(value).toLowerCase().includes(query));
+              const matchIncident = !incidents.checked || row.clipping || row.thermal_limited;
+              return matchStrategy && matchQuery && matchIncident;
+            }});
+          }};
+          const render = () => {{
+            const rows = filteredRows();
+            const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+            page = Math.min(page, pageCount - 1);
+            const visible = rows.slice(page * pageSize, (page + 1) * pageSize);
+            body.innerHTML = visible.map(row => {{
+              const incident = row.clipping || row.thermal_limited;
+              const status = row.clipping ? 'CLIPPING' : row.thermal_limited ? 'THERMAL LIMIT' : 'NORMAL';
+              return `<tr class="${{incident ? 'incident-row' : ''}}"><td>${{row.strategy === 'predictive_mpc' ? 'Orchestrator' : 'Sabit'}}</td><td>${{Number(row.time_s).toFixed(1)}}s</td><td>${{Number(row.distance_m).toFixed(0)}}m</td><td>${{esc(row.segment_type)}}</td><td>${{esc(row.driver_command)}}</td><td>${{Number(row.deploy_kw).toFixed(1)}} kW</td><td>${{Number(row.regen_kw).toFixed(1)}} kW</td><td>${{Number(row.soc_mj).toFixed(2)}} MJ</td><td>${{Number(row.battery_temp_c).toFixed(1)}} C</td><td>${{Number(row.clipping_risk).toFixed(2)}}</td><td>${{status}}</td></tr>`;
+            }}).join('') || '<tr><td colspan="11">Filtreye uyan kayıt yok.</td></tr>';
+            count.textContent = `${{rows.length}} kayıt`;
+            pageLabel.textContent = `Sayfa ${{page + 1}} / ${{pageCount}}`;
+            document.getElementById('reo-prev-page').disabled = page === 0;
+            document.getElementById('reo-next-page').disabled = page >= pageCount - 1;
+          }};
+          [strategy, text, incidents].forEach(control => control.addEventListener('input', () => {{ page = 0; render(); }}));
+          document.getElementById('reo-reset-filter').addEventListener('click', () => {{ strategy.value = 'all'; text.value = ''; incidents.checked = false; page = 0; render(); }});
+          document.getElementById('reo-prev-page').addEventListener('click', () => {{ page -= 1; render(); }});
+          document.getElementById('reo-next-page').addEventListener('click', () => {{ page += 1; render(); }});
+          render();
+        }})();
+      </script>
 """
 
 

@@ -71,31 +71,25 @@ def test_metrics_are_deterministic() -> None:
 
 def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
     report = tmp_path / "report.html"
-    metrics = tmp_path / "metrics.csv"
-    trace = tmp_path / "strategy_trace.csv"
 
     result = main(
         [
             "--synthetic-only",
             "--output",
             str(report),
-            "--metrics-output",
-            str(metrics),
-            "--trace-output",
-            str(trace),
         ]
     )
 
     assert result == 0
     assert report.exists() and report.stat().st_size > 1000
-    assert metrics.exists()
-    assert trace.exists()
     assert "Race Energy Orchestrator" in report.read_text(encoding="utf-8")
+    assert "Telemetry Data Explorer" in report.read_text(encoding="utf-8")
+    assert not (tmp_path / "metrics.csv").exists()
+    assert not (tmp_path / "strategy_trace.csv").exists()
 
 
 def test_cli_scenario_overrides_are_reflected_in_report(tmp_path) -> None:
     report = tmp_path / "hot_scenario.html"
-    metrics = tmp_path / "metrics.csv"
 
     result = main(
         [
@@ -110,8 +104,6 @@ def test_cli_scenario_overrides_are_reflected_in_report(tmp_path) -> None:
             "38",
             "--output",
             str(report),
-            "--metrics-output",
-            str(metrics),
         ]
     )
 

@@ -24,6 +24,8 @@ Dashboard UI output:
 python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.html
 ```
 
+All telemetry, strategy decisions, filters, charts, and scenario analysis are embedded in the self-contained HTML dashboard. CSV files are not written unless an explicit output path is provided.
+
 Scenario run with hotter ambient conditions and a lower starting battery state:
 
 ```bash
@@ -36,7 +38,7 @@ Compare orchestrator behavior across baseline, hot, low-SoC, and thermal-stress 
 python -m race_energy_orchestrator --synthetic-only --compare-scenarios --output outputs/scenario_dashboard.html
 ```
 
-This writes `outputs/scenario_comparison.csv` and adds the comparison table to the dashboard.
+This adds the comparison table to the dashboard. To additionally export CSV data, pass `--metrics-output`, `--trace-output`, or `--comparison-output` explicitly.
 
 Deploy-ready static output:
 
@@ -50,9 +52,8 @@ Then open `http://localhost:8000`.
 Outputs:
 
 - `outputs/report.html`: self-contained Plotly HTML report
-- `outputs/metrics.csv`: fixed-map vs predictive strategy metrics
-- `outputs/strategy_trace.csv`: combined strategy trace
 - `docs/index.html`: static dashboard entrypoint for deployment
+- Optional CSV exports are created only when `--metrics-output`, `--trace-output`, or `--comparison-output` is explicitly passed.
 
 ## Model Basis
 
