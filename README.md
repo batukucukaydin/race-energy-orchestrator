@@ -30,6 +30,14 @@ Scenario run with hotter ambient conditions and a lower starting battery state:
 python -m race_energy_orchestrator --synthetic-only --ambient-temp-c 34 --initial-soc-mj 2.6 --initial-battery-temp-c 52 --horizon-s 38 --output outputs/hot_scenario.html
 ```
 
+Compare orchestrator behavior across baseline, hot, low-SoC, and thermal-stress scenarios:
+
+```bash
+python -m race_energy_orchestrator --synthetic-only --compare-scenarios --output outputs/scenario_dashboard.html
+```
+
+This writes `outputs/scenario_comparison.csv` and adds the comparison table to the dashboard.
+
 Deploy-ready static output:
 
 ```bash
@@ -64,4 +72,3 @@ python -m pytest
 ./scripts/build-dashboard.sh
 npm run build
 ```
-

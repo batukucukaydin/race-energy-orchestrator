@@ -19,6 +19,7 @@ def render_report(
     metrics: pd.DataFrame,
     config: EnergyConfig,
     output_path: str | Path,
+    scenario_comparison: pd.DataFrame | None = None,
 ) -> Path:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +333,10 @@ def render_report(
       font-size: 12px;
       font-weight: 750;
     }}
+    .pill.warning {{
+      background: #fff1df;
+      color: var(--amber);
+    }}
     table {{
       width: 100%;
       border-collapse: collapse;
@@ -414,6 +419,8 @@ def render_report(
         <h2>Orchestrator Insight</h2>
         {_orchestrator_insights(metrics, predictive_trace, config)}
       </div>
+
+      {_scenario_comparison_panel(scenario_comparison)}
 
       <div class="panel">
         <h2>Pist Enerji Seridi</h2>
@@ -536,6 +543,38 @@ def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd
       <div class="side-block">
         <span class="side-label">Peak risk</span>
         <span class="side-value">{risk_peak:.2f}</span>
+      </div>
+"""
+
+
+def _scenario_comparison_panel(comparison: pd.DataFrame | None) -> str:
+    if comparison is None or comparison.empty:
+        return ""
+    rows = []
+    for _, row in comparison.iterrows():
+        status = "Etkili" if bool(row["effective"]) else "Incelenmeli"
+        status_class = "pill" if bool(row["effective"]) else "pill warning"
+        rows.append(
+            "<tr>"
+            f"<td><b>{escape(str(row['scenario']).replace('_', ' ').title())}</b></td>"
+            f"<td>{row['ambient_temp_c']:.1f}C</td>"
+            f"<td>{row['lap_gain_s']:.3f}s</td>"
+            f"<td>{row['clipping_reduction_s']:.3f}s</td>"
+            f"<td>{row['orchestrator_thermal_limit_s']:.3f}s</td>"
+            f"<td>{row['orchestrator_end_soc_mj']:.3f} MJ</td>"
+            f"<td><span class=\"{status_class}\">{status}</span></td>"
+            "</tr>"
+        )
+    return f"""
+      <div class="panel">
+        <h2>Scenario Validation</h2>
+        <p>Orchestrator performansi, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.</p>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Senaryo</th><th>Ortam</th><th>Lap kazancı</th><th>Clipping azalımı</th><th>Termal limit</th><th>Final SoC</th><th>Durum</th></tr></thead>
+            <tbody>{''.join(rows)}</tbody>
+          </table>
+        </div>
       </div>
 """
 

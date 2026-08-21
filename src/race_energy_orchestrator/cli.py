@@ -11,6 +11,7 @@ from .data import load_lap_data
 from .metrics import metrics_frame
 from .model import simulate_strategy
 from .report import render_report
+from .scenarios import compare_scenarios
 from .segmentation import add_track_features
 
 
@@ -37,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Override starting battery temperature in Celsius.",
     )
     parser.add_argument("--horizon-s", type=float, default=None, help="Override predictive strategy lookahead horizon.")
+    parser.add_argument(
+        "--compare-scenarios",
+        action="store_true",
+        help="Run baseline, hot, low-SoC, and thermal-stress comparisons.",
+    )
+    parser.add_argument("--comparison-output", default=None, help="CSV path for the scenario comparison.")
     return parser
 
 
@@ -63,16 +70,25 @@ def main(argv: list[str] | None = None) -> int:
 
     metrics = metrics_frame([fixed, predictive], config)
     combined_trace = pd.concat([fixed, predictive], ignore_index=True)
+    comparison = None
+    comparison_output = None
+    if args.compare_scenarios:
+        comparison = compare_scenarios(lap_data.frame, config)
+        comparison_output = Path(args.comparison_output) if args.comparison_output else output_path.parent / "scenario_comparison.csv"
+        comparison_output.parent.mkdir(parents=True, exist_ok=True)
+        comparison.to_csv(comparison_output, index=False)
 
     metrics_output.parent.mkdir(parents=True, exist_ok=True)
     trace_output.parent.mkdir(parents=True, exist_ok=True)
     metrics.to_csv(metrics_output, index=False)
     combined_trace.to_csv(trace_output, index=False)
-    render_report(lap_data, featured, fixed, predictive, metrics, config, output_path)
+    render_report(lap_data, featured, fixed, predictive, metrics, config, output_path, comparison)
 
     print(f"Report: {output_path}")
     print(f"Metrics: {metrics_output}")
     print(f"Trace: {trace_output}")
+    if comparison_output is not None:
+        print(f"Scenario comparison: {comparison_output}")
     print(f"Data source: {lap_data.source} - {lap_data.source_detail}")
     return 0
 

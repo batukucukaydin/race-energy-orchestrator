@@ -8,6 +8,7 @@ from race_energy_orchestrator.data import generate_synthetic_lap
 from race_energy_orchestrator.metrics import metrics_frame
 from race_energy_orchestrator.model import simulate_strategy
 from race_energy_orchestrator.segmentation import add_track_features
+from race_energy_orchestrator.scenarios import compare_scenarios
 
 
 def _synthetic_featured(config: EnergyConfig | None = None) -> pd.DataFrame:
@@ -118,3 +119,13 @@ def test_cli_scenario_overrides_are_reflected_in_report(tmp_path) -> None:
     html = report.read_text(encoding="utf-8")
     assert "ortam 34.0C" in html
     assert "baslangic SoC 2.60 MJ" in html
+
+
+def test_scenario_comparison_covers_expected_conditions() -> None:
+    config = EnergyConfig()
+    comparison = compare_scenarios(generate_synthetic_lap().frame, config)
+
+    assert comparison["scenario"].tolist() == ["baseline", "hot", "low_soc", "thermal_stress"]
+    assert comparison["lap_gain_s"].notna().all()
+    assert comparison["clipping_reduction_s"].notna().all()
+    assert comparison["orchestrator_end_soc_mj"].between(config.minimum_soc_mj, config.usable_energy_mj).all()
