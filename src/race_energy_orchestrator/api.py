@@ -51,6 +51,10 @@ class TraceResponse(BaseModel):
     predictive_mpc: list[dict[str, float | str]]
 
 
+class ExplorerResponse(BaseModel):
+    rows: list[dict[str, float | str | bool]]
+
+
 TRACK_OPTIONS = [
     {"event": "Monza", "label": "Monza"},
     {"event": "Spa-Francorchamps", "label": "Spa-Francorchamps"},
@@ -164,6 +168,19 @@ def create_app() -> FastAPI:
             predictive_mpc=[_trace_record(row) for _, row in session["predictive"].iterrows()],
         )
 
+    @app.get("/api/explorer", response_model=ExplorerResponse)
+    def explorer(
+        year: int = Query(default=2024, ge=2020, le=2030),
+        event: str = Query(default="Monza", min_length=2, max_length=80),
+        session_name: str = Query(default="Q", min_length=1, max_length=20),
+        driver: str = Query(default="LEC", min_length=2, max_length=4),
+    ) -> ExplorerResponse:
+        session = _session(year, event, session_name, driver)
+        rows = []
+        for strategy, key in (("fixed_map", "fixed"), ("predictive_mpc", "predictive")):
+            rows.extend(_explorer_record(row, strategy) for _, row in session[key].iterrows())
+        return ExplorerResponse(rows=rows)
+
     return app
 
 
@@ -222,6 +239,7 @@ def _record(row: pd.Series) -> dict[str, float | str]:
 def _trace_record(row: pd.Series) -> dict[str, float | str]:
     return {
         "distance_m": float(row["distance_m"]),
+        "segment_type": str(row["segment_type"]),
         "speed_kmh": float(row["speed_kmh"]),
         "aero_mode": str(row["aero_mode"]),
         "deploy_kw": float(row["deploy_kw"]),
@@ -229,6 +247,23 @@ def _trace_record(row: pd.Series) -> dict[str, float | str]:
         "soc_mj": float(row["soc_mj"]),
         "clipping_risk": float(row["clipping_risk"]),
         "battery_temp_c": float(row["battery_temp_c"]),
+    }
+
+
+def _explorer_record(row: pd.Series, strategy: str) -> dict[str, float | str | bool]:
+    return {
+        "time_s": float(row["time_s"]),
+        "distance_m": float(row["distance_m"]),
+        "segment_type": str(row["segment_type"]),
+        "strategy": strategy,
+        "driver_command": str(row["driver_command"]),
+        "deploy_kw": float(row["deploy_kw"]),
+        "regen_kw": float(row["regen_kw"]),
+        "soc_mj": float(row["soc_mj"]),
+        "battery_temp_c": float(row["battery_temp_c"]),
+        "clipping_risk": float(row["clipping_risk"]),
+        "clipping": bool(row["clipping"]),
+        "thermal_limited": bool(row["thermal_limited"]),
     }
 
 

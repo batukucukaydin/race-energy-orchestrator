@@ -27,13 +27,19 @@ def load_lap_data(
     synthetic_only: bool = False,
 ) -> LapData:
     if synthetic_only:
-        return generate_synthetic_lap("Synthetic Monza-like lap requested by CLI.")
+        return generate_synthetic_lap(
+            f"Synthetic {event}-like lap requested by CLI.",
+            track=event,
+            year=year,
+            session_name=session_name,
+            driver=driver,
+        )
 
     try:
         return _load_fastf1_lap(year, event, session_name, driver, cache_dir)
     except Exception as exc:  # FastF1/network availability is intentionally optional.
         note = f"FastF1 unavailable ({type(exc).__name__}: {exc}). Using deterministic synthetic fallback."
-        return generate_synthetic_lap(note)
+        return generate_synthetic_lap(note, track=event, year=year, session_name=session_name, driver=driver)
 
 
 def _load_fastf1_lap(
@@ -107,8 +113,14 @@ def _clean_required_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return clean
 
 
-def generate_synthetic_lap(note: str | None = None) -> LapData:
-    """Create a deterministic Monza-like lap with long straights and heavy braking."""
+def generate_synthetic_lap(
+    note: str | None = None,
+    track: str = "Monza",
+    year: int = 2024,
+    session_name: str = "Q",
+    driver: str = "LEC",
+) -> LapData:
+    """Create a deterministic track-shaped lap for the selected session."""
 
     segments: list[dict[str, Any]] = [
         {"name": "Main straight", "type": "straight", "length": 920, "v0": 260, "v1": 335},
@@ -127,17 +139,29 @@ def generate_synthetic_lap(note: str | None = None) -> LapData:
         {"name": "Parabolica", "type": "fast_corner", "length": 445, "v0": 165, "v1": 255},
     ]
 
+    track_key = track.lower().replace("-", "")
+    track_length_scale, track_speed_scale = {
+        "monza": (1.00, 1.00),
+        "spafrancorchamps": (0.96, 0.97),
+        "silverstone": (1.03, 1.01),
+        "suzuka": (0.94, 0.96),
+    }.get(track_key, (1.00, 0.99))
+    session_speed_scale = {"Q": 1.00, "R": 0.95, "FP1": 0.90, "FP2": 0.93, "FP3": 0.97}.get(session_name.upper(), 0.95)
+    driver_speed_scale = {"LEC": 1.000, "VER": 1.006, "NOR": 0.997, "HAM": 0.992}.get(driver.upper(), 0.995)
+    year_speed_scale = 1.0 + max(-2, min(4, year - 2024)) * 0.002
+    speed_scale = track_speed_scale * session_speed_scale * driver_speed_scale * year_speed_scale
+
     rows: list[dict[str, float | int | str]] = []
     distance = 0.0
     time_s = 0.0
     step_m = 5.0
     for segment in segments:
-        length = float(segment["length"])
+        length = float(segment["length"]) * track_length_scale
         steps = max(3, int(round(length / step_m)))
         for i in range(steps):
             progress = i / max(1, steps - 1)
             eased = progress * progress * (3.0 - 2.0 * progress)
-            speed = float(segment["v0"]) + (float(segment["v1"]) - float(segment["v0"])) * eased
+            speed = (float(segment["v0"]) + (float(segment["v1"]) - float(segment["v0"])) * eased) * speed_scale
             speed = max(speed, 35.0)
             throttle, brake = _synthetic_controls(str(segment["type"]), progress)
             dt = step_m / (speed / 3.6)
@@ -159,7 +183,7 @@ def generate_synthetic_lap(note: str | None = None) -> LapData:
     return LapData(
         frame=frame,
         source="Synthetic",
-        source_detail="Deterministic Monza-like lap with public 2026-style ERS assumptions",
+        source_detail=f"Deterministic {track}-like {session_name.upper()} lap for {driver.upper()} with public 2026-style ERS assumptions",
         notes=notes,
     )
 

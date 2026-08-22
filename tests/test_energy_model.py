@@ -152,6 +152,14 @@ def test_fastapi_decision_contract() -> None:
     )
     options = client.get("/api/options")
     trace = client.get("/api/trace", params={"event": "Suzuka"})
+    selected_trace = client.get(
+        "/api/trace",
+        params={"year": 2026, "event": "Suzuka", "session_name": "R", "driver": "VER"},
+    )
+    explorer = client.get(
+        "/api/explorer",
+        params={"year": 2026, "event": "Suzuka", "session_name": "R", "driver": "VER"},
+    )
     decision = client.get("/api/decision", params={"index": 4})
     decisions = client.get("/api/decisions", params={"start": 2, "limit": 3})
 
@@ -167,6 +175,12 @@ def test_fastapi_decision_contract() -> None:
     assert "Suzuka" in {event["event"] for event in options.json()["events"]}
     assert trace.status_code == 200
     assert len(trace.json()["predictive_mpc"]) > 100
+    assert selected_trace.status_code == 200
+    assert selected_trace.json()["predictive_mpc"][0]["distance_m"] == trace.json()["predictive_mpc"][0]["distance_m"]
+    assert selected_trace.json()["predictive_mpc"][0]["speed_kmh"] != trace.json()["predictive_mpc"][0]["speed_kmh"]
+    assert "segment_type" in selected_trace.json()["predictive_mpc"][0]
+    assert explorer.status_code == 200
+    assert {row["strategy"] for row in explorer.json()["rows"]} == {"fixed_map", "predictive_mpc"}
     assert metrics.status_code == 200
     assert {row["strategy"] for row in metrics.json()["rows"]} == {"fixed_map", "predictive_mpc"}
     assert decision.json()["decision"]["command"]
