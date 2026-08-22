@@ -85,7 +85,7 @@ def render_report(
     main {{
       width: min(1560px, calc(100vw - 32px));
       margin: 0 auto;
-      padding: 26px 0 44px;
+      padding: 12px 0 44px;
     }}
     .shell {{
       display: block;
@@ -141,27 +141,33 @@ def render_report(
       max-width: 100%;
     }}
     .topbar {{
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) auto minmax(240px, 1fr);
       align-items: center;
-      justify-content: space-between;
       gap: 16px;
       margin-bottom: 16px;
+      min-height: 48px;
       position: sticky;
       top: 0;
       z-index: 50;
-      padding: 10px 0;
+      padding: 8px 0;
       background: var(--bg);
     }}
-    .topbar-label {{ color: var(--muted); font-size: 13px; font-weight: 700; }}
-    .page-nav {{ display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
-    .page-nav a {{ padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 800; text-decoration: none; transition: border-color .18s ease, background .18s ease, color .18s ease; }}
+    .brand-lockup {{ grid-column:1; justify-self:start; display:inline-flex; align-items:center; gap:10px; color:var(--ink); font-size:13px; font-weight:800; text-decoration:none; white-space:nowrap; }}
+    .brand-mark {{ position:relative; width:32px; height:32px; flex:0 0 32px; overflow:hidden; border:1px solid #d33b46; border-radius:6px; background:#171a1f; }}
+    .brand-mark i {{ position:absolute; left:7px; width:18px; height:3px; border-radius:2px; background:#eef3f7; transform:skewX(-24deg); }}
+    .brand-mark i:nth-child(1) {{ top:8px; background:var(--red); }}
+    .brand-mark i:nth-child(2) {{ top:14px; width:14px; }}
+    .brand-mark i:nth-child(3) {{ top:20px; width:10px; background:#27a4a4; }}
+    .page-nav {{ grid-column:2; justify-self:center; display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
+    .page-nav a {{ display:grid; place-items:center; min-height:34px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 800; line-height:1; text-decoration: none; transition: border-color .18s ease, background .18s ease, color .18s ease; }}
     .page-nav a.active {{ border-color: var(--red); color: var(--red-deep); }}
     .language-switch {{ display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }}
     .language-switch button {{ border: 0; border-radius: 6px; padding: 7px 11px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; }}
     .language-switch button.active {{ background: var(--surface-strong); color: white; }}
     .theme-toggle {{ min-width: 36px; min-height: 32px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-weight: 800; }}
-    .topbar-actions {{ display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }}
-    .api-indicator {{ display:inline-flex; align-items:center; gap:7px; min-height:32px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.04em; white-space:nowrap; }}
+    .topbar-actions {{ grid-column:3; justify-self:end; display: inline-flex; align-items: center; gap: 8px; }}
+    .api-indicator {{ display:inline-flex; align-items:center; justify-content:center; gap:7px; width:112px; min-height:32px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.04em; white-space:nowrap; }}
     .api-indicator-dot {{ width:8px; height:8px; border-radius:50%; background:#bf7a00; box-shadow:0 0 0 3px rgba(191,122,0,.16); }}
     .api-indicator.live {{ color:#197044; border-color:#4ba879; }}
     .api-indicator.live .api-indicator-dot {{ background:#2f9b63; box-shadow:0 0 0 3px rgba(47,155,99,.18); }}
@@ -566,7 +572,6 @@ def render_report(
     @media (max-width: 1060px) {{
       .shell, .hero, .grid, .purpose, .live-decision {{ grid-template-columns: 1fr; }}
       aside {{ position: relative; min-height: auto; top: 0; }}
-      .topbar-label {{ display:none; }}
       .hero-main {{ min-height: 300px; }}
       .hero-metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
       .compact-hero {{ align-items: flex-start; flex-direction: column; }}
@@ -581,11 +586,13 @@ def render_report(
       .analysis-grid .command-list {{ grid-template-columns:1fr; }}
       .shell, .content, .hero, .grid, .panel {{ width: 100%; max-width: 100%; }}
     }}
-    @media (max-width: 680px) {{
+    @media (max-width: 760px) {{
       main {{ width: min(100vw - 16px, 1560px); padding-top: 4px; }}
       .hero-metrics {{ grid-template-columns: 1fr; }}
-      .topbar, .decision-flow {{ grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }}
+      .topbar, .decision-flow {{ grid-template-columns: 1fr; align-items: stretch; }}
       .topbar {{ gap:8px; }}
+      .brand-lockup, .page-nav, .topbar-actions {{ grid-column:1; }}
+      .brand-lockup {{ justify-self:start; }}
       .page-nav {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; overflow:visible; padding-bottom:2px; }}
       .page-nav a {{ min-width:0; padding-inline:5px; text-align:center; }}
       .topbar-actions {{ display:grid; grid-template-columns:auto auto 34px; width:100%; justify-content:space-between; margin-left:0; }}
@@ -617,7 +624,7 @@ def render_report(
   <div id="reo-page-loading" aria-live="polite" aria-busy="true"><div class="page-loading-card"><span class="page-loading-spinner" aria-hidden="true"></span><b data-i18n="loadingData">Veri yükleniyor</b><small data-i18n="loadingDataCopy">Seçilen oturum ve pist analizi hazırlanıyor.</small></div></div>
 <main>
   <div class="topbar">
-    <span class="topbar-label" data-i18n="panelPurpose">Race Energy Orchestrator / Energy Decision Cockpit</span>
+    <a class="brand-lockup" href="index.html{selection_query}" aria-label="Race Energy Orchestrator Dashboard"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Race Energy Orchestrator</span></a>
     <nav class="page-nav" aria-label="Dashboard pages"><a class="active" href="index.html{selection_query}" data-i18n="navDashboard">Dashboard</a><a href="explorer.html{selection_query}" data-i18n="navTelemetry">Telemetry</a><a href="guide.html{selection_query}" data-i18n="navGuide">Guide</a></nav>
     <div class="topbar-actions"><span class="api-indicator checking" id="reo-api-indicator"><i class="api-indicator-dot" aria-hidden="true"></i><span id="reo-api-indicator-text" data-i18n="apiChecking">Kontrol ediliyor</span></span><div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div><button class="theme-toggle" id="reo-theme-toggle" type="button" aria-label="Toggle dark mode">◐</button></div>
   </div>

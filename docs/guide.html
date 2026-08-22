@@ -10,17 +10,29 @@
     [data-theme="dark"] { --bg:#0d1116; --surface:#151b22; --ink:#eef3f7; --muted:#aab6c1; --line:#303b47; --shadow:0 14px 34px rgba(0,0,0,.28); }
     * { box-sizing:border-box; }
     body { margin:0; color:var(--ink); background:var(--bg); font-family:"Avenir Next","Segoe UI",sans-serif; transition:background .18s ease,color .18s ease; }
-    main { width:min(1440px,calc(100vw - 32px)); margin:auto; padding:12px 0 48px; }
-    header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; min-height:48px; position:sticky; top:0; z-index:20; padding:8px 0; background:var(--bg); }
-    header strong { font-size:15px; }
-    nav { display:flex; flex-wrap:wrap; gap:6px; }
-    nav a { padding:7px 10px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font-size:12px; font-weight:800; text-decoration:none; transition:border-color .18s ease,background .18s ease; }
+    main { width:min(1560px,calc(100vw - 32px)); margin:auto; padding:12px 0 48px; }
+    header { display:grid; grid-template-columns:minmax(240px,1fr) auto minmax(240px,1fr); align-items:center; gap:16px; margin-bottom:16px; min-height:48px; position:sticky; top:0; z-index:20; padding:8px 0; background:var(--bg); }
+    .brand-lockup { grid-column:1; justify-self:start; display:inline-flex; align-items:center; gap:10px; color:var(--ink); font-size:13px; font-weight:800; text-decoration:none; white-space:nowrap; }
+    .brand-mark { position:relative; width:32px; height:32px; flex:0 0 32px; overflow:hidden; border:1px solid #d33b46; border-radius:6px; background:#171a1f; }
+    .brand-mark i { position:absolute; left:7px; width:18px; height:3px; border-radius:2px; background:#eef3f7; transform:skewX(-24deg); }
+    .brand-mark i:nth-child(1) { top:8px; background:var(--red); }
+    .brand-mark i:nth-child(2) { top:14px; width:14px; }
+    .brand-mark i:nth-child(3) { top:20px; width:10px; background:#27a4a4; }
+    nav { grid-column:2; justify-self:center; display:flex; flex-wrap:wrap; gap:6px; }
+    nav a { display:grid; place-items:center; min-height:34px; padding:7px 10px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font-size:12px; font-weight:800; line-height:1; text-decoration:none; transition:border-color .18s ease,background .18s ease; }
     nav a.active { border-color:var(--red); color:var(--red-deep); }
     .hero, .panel, details { border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow); }
-    .topbar-actions { display:flex; align-items:center; gap:8px; margin-left:auto; }
-    .language-switch { display:flex; gap:2px; padding:3px; border:1px solid var(--line); border-radius:7px; background:var(--surface); }
-    .language-switch button, .theme-toggle { min-height:30px; border:0; border-radius:5px; padding:5px 9px; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:12px; font-weight:800; }
-    .language-switch button.active, .theme-toggle { background:var(--ink); color:var(--bg); }
+    .topbar-actions { grid-column:3; justify-self:end; display:flex; align-items:center; gap:8px; }
+    .api-indicator { display:inline-flex; align-items:center; justify-content:center; gap:7px; width:112px; min-height:32px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.04em; white-space:nowrap; }
+    .api-indicator-dot { width:8px; height:8px; border-radius:50%; background:#bf7a00; box-shadow:0 0 0 3px rgba(191,122,0,.16); }
+    .api-indicator.live { color:#197044; border-color:#4ba879; }
+    .api-indicator.live .api-indicator-dot { background:#2f9b63; box-shadow:0 0 0 3px rgba(47,155,99,.18); }
+    .api-indicator.offline { color:#b5121b; border-color:#d26b72; }
+    .api-indicator.offline .api-indicator-dot { background:#d33b46; box-shadow:0 0 0 3px rgba(211,59,70,.18); }
+    .language-switch { display:inline-flex; padding:3px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+    .language-switch button { border:0; border-radius:6px; padding:7px 11px; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:12px; font-weight:800; }
+    .language-switch button.active { background:#171a1f; color:white; }
+    .theme-toggle { min-width:36px; min-height:32px; padding:6px 9px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); cursor:pointer; font:inherit; font-weight:800; }
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] button { color-scheme:dark; }
     .hero { padding:18px 20px; margin-bottom:16px; }
     h1 { margin:0 0 7px; font-size:clamp(26px,3vw,36px); line-height:1.12; }
@@ -51,11 +63,11 @@
     th:first-child, td:first-child { text-align:left; }
     .explorer-footer { display:flex; justify-content:space-between; gap:12px; margin-top:12px; color:var(--muted); font-size:12px; }
     @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
-    @media (max-width:760px) { main { width:min(100vw - 16px,1440px); padding-top:4px; } header { align-items:stretch; flex-direction:column; gap:8px; } nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; } nav a { min-width:0; padding-inline:5px; text-align:center; } .topbar-actions { width:100%; justify-content:space-between; margin-left:0; } .panel { overflow-x:auto; } .hero { padding:16px; } }
+    @media (max-width:760px) { main { width:min(100vw - 16px,1560px); padding-top:4px; } header { grid-template-columns:1fr; align-items:stretch; gap:8px; } .brand-lockup, nav, .topbar-actions { grid-column:1; } nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; } nav a { min-width:0; padding-inline:5px; text-align:center; } .topbar-actions { display:grid; grid-template-columns:auto auto 34px; width:100%; justify-content:space-between; } .api-indicator { max-width:150px; overflow:hidden; text-overflow:ellipsis; } .panel { overflow-x:auto; } .hero { padding:16px; } }
   </style>
 </head>
 <body><main>
-  <header><strong>REO / Race Energy Orchestrator</strong><nav><a href="index.html" data-nav="dashboard" data-i18n="navDashboard">Dashboard</a><a class="" href="explorer.html" data-nav="telemetry" data-i18n="navTelemetry">Telemetry</a><a class="active" href="guide.html" data-nav="guide" data-i18n="navGuide">Guide</a></nav><div class="topbar-actions"><div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div><button class="theme-toggle" id="reo-theme-toggle" type="button" aria-label="Toggle dark mode">◐</button></div></header>
+  <header><a class="brand-lockup" href="index.html" data-nav="brand" aria-label="Race Energy Orchestrator Dashboard"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Race Energy Orchestrator</span></a><nav><a href="index.html" data-nav="dashboard" data-i18n="navDashboard">Dashboard</a><a class="" href="explorer.html" data-nav="telemetry" data-i18n="navTelemetry">Telemetry</a><a class="active" href="guide.html" data-nav="guide" data-i18n="navGuide">Guide</a></nav><div class="topbar-actions"><span class="api-indicator checking" id="reo-api-indicator"><i class="api-indicator-dot" aria-hidden="true"></i><span id="reo-api-indicator-text">KONTROL EDİLİYOR</span></span><div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div><button class="theme-toggle" id="reo-theme-toggle" type="button" aria-label="Toggle dark mode">◐</button></div></header>
   
       <section class="hero"><h1 data-i18n="guideTitle">Kılavuz ve Veri Sözleşmesi</h1><p data-i18n="guideCopy">Operasyon akışı, karar mantığı, model sınırları ve veri sözleşmeleri.</p></section>
       <div class="grid">
@@ -79,6 +91,17 @@
   Object.assign(dictionary.en, { guideTitle:'Guide & Data Contract', guideCopy:'Operating workflow, decision logic, model limits, and data contracts.', deployLogic:'Deploy: use power where acceleration has the highest lap-time value.', regenLogic:'Regen: recover braking energy for the next deployment opportunity.', thermalLogic:'Thermal protection: preserve battery temperature headroom.', holdLogic:'Energy hold: protect the map when an energy deficit or finish reserve is expected.' });
   Object.assign(dictionary.tr, { searchPlaceholder:'Komut, segment veya değer ara', explorerStrategyHeader:'Strateji', explorerTimeHeader:'Zaman', explorerDistanceHeader:'Mesafe', explorerSegmentHeader:'Segment', explorerCommandHeader:'Komut', explorerBatteryHeader:'Batarya', explorerRiskHeader:'Risk', explorerStatusHeader:'Durum' });
   Object.assign(dictionary.en, { rawDataTitle:'Inspect Raw Telemetry', rawDataHeading:'Telemetry Data Explorer', searchPlaceholder:'Search command, segment, or value', explorerStrategyHeader:'Strategy', explorerTimeHeader:'Time', explorerDistanceHeader:'Distance', explorerSegmentHeader:'Segment', explorerCommandHeader:'Command', explorerBatteryHeader:'Battery', explorerRiskHeader:'Risk', explorerStatusHeader:'Status' });
+  let supportApiState = 'checking';
+  const renderApiIndicator = () => {
+    const language = document.documentElement.lang === 'en' ? 'en' : 'tr';
+    const labels = language === 'en'
+      ? { checking:'CHECKING', live:'CONNECTED', offline:'OFFLINE' }
+      : { checking:'KONTROL EDİLİYOR', live:'BAĞLI', offline:'ÇEVRİMDIŞI' };
+    const indicator = document.getElementById('reo-api-indicator');
+    if (indicator) indicator.className = `api-indicator ${supportApiState}`;
+    const text = document.getElementById('reo-api-indicator-text');
+    if (text) text.textContent = labels[supportApiState];
+  };
   const setLanguage = language => {
     document.documentElement.lang = language;
     localStorage.setItem('reo-language', language);
@@ -87,6 +110,7 @@
     document.querySelectorAll('[data-i18n-tr]').forEach(node => { node.textContent = language === 'en' ? node.dataset.i18nEn : node.dataset.i18nTr; });
     document.getElementById('lang-tr').classList.toggle('active', language === 'tr');
     document.getElementById('lang-en').classList.toggle('active', language === 'en');
+    renderApiIndicator();
   };
   const applyTheme = theme => {
     document.documentElement.dataset.theme = theme;
@@ -100,5 +124,8 @@
   document.getElementById('reo-theme-toggle').addEventListener('click', () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
   applyTheme(localStorage.getItem('reo-theme') || 'dark');
   setLanguage(localStorage.getItem('reo-language') || 'tr');
+  fetch(`${document.documentElement.dataset.apiBase}/api/health`, { cache:'no-store' })
+    .then(response => { if (!response.ok) throw new Error('API unavailable'); supportApiState = 'live'; renderApiIndicator(); })
+    .catch(() => { supportApiState = 'offline'; renderApiIndicator(); });
 })();
 </script></body></html>
