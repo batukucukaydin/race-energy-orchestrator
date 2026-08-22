@@ -16,19 +16,20 @@ def render_support_pages(
     fixed_trace: pd.DataFrame,
     predictive_trace: pd.DataFrame,
     config: EnergyConfig,
+    api_base: str = "http://localhost:8001",
 ) -> tuple[Path, Path]:
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     explorer = directory / "explorer.html"
     guide = directory / "guide.html"
-    explorer.write_text(_explorer_html(fixed_trace, predictive_trace), encoding="utf-8")
-    guide.write_text(_guide_html(lap_data, config), encoding="utf-8")
+    explorer.write_text(_explorer_html(fixed_trace, predictive_trace, api_base), encoding="utf-8")
+    guide.write_text(_guide_html(lap_data, config, api_base), encoding="utf-8")
     return explorer, guide
 
 
-def _shell(title: str, body: str) -> str:
+def _shell(title: str, body: str, api_base: str) -> str:
     return f"""<!doctype html>
-<html lang="tr">
+<html lang="tr" data-api-base="{escape(api_base)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -83,13 +84,16 @@ def _shell(title: str, body: str) -> str:
 </main><script>
 (() => {{
   const dictionary = {{
-    tr: {{ navDashboard:'Dashboard', navTelemetry:'Telemetry', navGuide:'Guide', explorerTitle:'Telemetri Gezgini', explorerCopy:'Ham karar kayıtlarını strateji, risk, segment ve komut bazında incele.', guideTitle:'Kılavuz ve Veri Sözleşmesi', guideCopy:'Nasıl kullanılır / Model varsayımları / Veri sözleşmesi', howToTitle:'1. Nasıl kullanılır?', howTo1:'Önce Dashboard sayfasından yıl, pist, oturum ve sürücüyü seç.', howTo2:'Canlı karar konsolunda komut, gerekçe, SoC, sıcaklık ve clipping riskini izle.', howTo3:'Grafikteki kırmızı imleç aracın tur içindeki mevcut konumunu gösterir.', howTo4:'Ham kayıtları karşılaştırmak için Telemetry sayfasına geç.', logicTitle:'2. Karar mantığı', logicCopy:'Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.', rawDataTitle:'Ham telemetriyi incele', rawDataHeading:'Telemetri veri gezgini', rawDataCopy:'Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.', strategyFilter:'Strateji', allOption:'Tümü', fixedOption:'Sabit harita', searchFilter:'Arama', incidentFilter:'Clipping / termal limit', clearFilters:'Filtreleri temizle', previous:'Önceki', next:'Sonraki' }},
-    en: {{ navDashboard:'Dashboard', navTelemetry:'Telemetry', navGuide:'Guide', explorerTitle:'Telemetry Explorer', explorerCopy:'Inspect raw decision records by strategy, risk, segment, and command.', guideTitle:'Guide and Data Contract', guideCopy:'How to use it / Model assumptions / Data contract', howToTitle:'1. How to use it', howTo1:'Select the year, track, session, and driver from the Dashboard first.', howTo2:'Monitor the command, rationale, SoC, temperature, and clipping risk in the live console.', howTo3:'The red chart marker shows the car’s current position around the lap.', howTo4:'Open Telemetry to compare the raw decision records.', logicTitle:'2. Decision logic', logicCopy:'The system produces a deploy, regen, or energy-save decision at each sample.', rawDataTitle:'Inspect raw telemetry', rawDataHeading:'Telemetry data explorer', rawDataCopy:'The full decision stream lives here. Explore strategy, risk, and commands without opening a file.', strategyFilter:'Strategy', allOption:'All', fixedOption:'Fixed map', searchFilter:'Search', incidentFilter:'Clipping / thermal limit', clearFilters:'Clear filters', previous:'Previous', next:'Next' }}
+    tr: {{ navDashboard:'Dashboard', navTelemetry:'Telemetry', navGuide:'Guide', explorerTitle:'Telemetri Gezgini', explorerCopy:'Ham karar kayıtlarını strateji, risk, segment ve komut bazında incele.', guideTitle:'Kılavuz ve Veri Sözleşmesi', guideCopy:'Nasıl kullanılır / Model varsayımları / Veri sözleşmesi', howToTitle:'1. Nasıl kullanılır?', howTo1:'Önce Dashboard sayfasından yıl, pist, oturum ve sürücüyü seç.', howTo2:'Canlı karar konsolunda komut, gerekçe, SoC, sıcaklık ve clipping riskini izle.', howTo3:'Grafikteki kırmızı imleç aracın tur içindeki mevcut konumunu gösterir.', howTo4:'Ham kayıtları karşılaştırmak için Telemetry sayfasına geç.', logicTitle:'2. Karar mantığı', logicCopy:'Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.', mainQuestion:'Bu panel neyi cevaplıyor?', mainAnswer:'Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?', readingGuide:'Nasıl okunmalı?', readingGuideCopy:'Önce KPI ve canlı konsola bak. Sonra grafik, karar akışı ve karşılaştırma tablosuyla kararın nedenini incele.', stepObserve:'1. Veriyi oku', stepObserveCopy:'Pist segmenti, hız, SoC ve batarya sıcaklığını izler.', stepPredict:'2. İleriyi tahmin et', stepPredictCopy:'Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.', stepDecide:'3. Karar ver', stepDecideCopy:'Deploy, regen veya enerji koruma komutunu üretir.', rawDataTitle:'Ham telemetriyi incele', rawDataHeading:'Telemetri veri gezgini', rawDataCopy:'Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.', strategyFilter:'Strateji', allOption:'Tümü', fixedOption:'Sabit harita', searchFilter:'Arama', incidentFilter:'Clipping / termal limit', clearFilters:'Filtreleri temizle', previous:'Önceki', next:'Sonraki' }},
+    en: {{ navDashboard:'Dashboard', navTelemetry:'Telemetry', navGuide:'Guide', explorerTitle:'Telemetry Explorer', explorerCopy:'Inspect raw decision records by strategy, risk, segment, and command.', guideTitle:'Guide and Data Contract', guideCopy:'How to use it / Model assumptions / Data contract', howToTitle:'1. How to use it', howTo1:'Select the year, track, session, and driver from the Dashboard first.', howTo2:'Monitor the command, rationale, SoC, temperature, and clipping risk in the live console.', howTo3:'The red chart marker shows the car’s current position around the lap.', howTo4:'Open Telemetry to compare the raw decision records.', logicTitle:'2. Decision logic', logicCopy:'The system produces a deploy, regen, or energy-save decision at each sample.', mainQuestion:'What question does this panel answer?', mainAnswer:'Across the lap, when should limited hybrid energy be deployed, regenerated, or protected?', readingGuide:'How should I read it?', readingGuideCopy:'Start with the KPI and live console. Then use the chart, decision flow, and comparison table to understand why.', stepObserve:'1. Read the data', stepObserveCopy:'Track segment, speed, SoC, and battery temperature are monitored.', stepPredict:'2. Look ahead', stepPredictCopy:'Long straights and braking zones are evaluated ahead of the car.', stepDecide:'3. Make the decision', stepDecideCopy:'The system produces deploy, regen, or energy-save commands.', rawDataTitle:'Inspect raw telemetry', rawDataHeading:'Telemetry data explorer', rawDataCopy:'The full decision stream lives here. Explore strategy, risk, and commands without opening a file.', strategyFilter:'Strategy', allOption:'All', fixedOption:'Fixed map', searchFilter:'Search', incidentFilter:'Clipping / thermal limit', clearFilters:'Clear filters', previous:'Previous', next:'Next' }}
   }};
+  Object.assign(dictionary.tr, {{ sourceLimitsTitle:'3. Veri kaynağı ve sınırlar', currentSource:'Mevcut kaynak:', sourceLimitsCopy:'Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.', inputContractTitle:'4. Girdi veri sözleşmesi', outputContractTitle:'5. Model çıktı sözleşmesi', apiContractTitle:'6. API sözleşmesi', columnHeader:'Kolon', meaningHeader:'Anlam', contractInputDescription:'FastF1 veya sentetik telemetri girdisi', contractOutputDescription:'Enerji modeli tarafından üretilen karar ve telemetri alanı', apiContractCopy:'Oturum, KPI, canlı karar ve grafik serileri API uç noktalarından döndürülür.', openApiDocs:'API OpenAPI dokümantasyonunu aç' }});
+  Object.assign(dictionary.en, {{ sourceLimitsTitle:'3. Data source and limits', currentSource:'Current source:', sourceLimitsCopy:'This prototype does not use private team vehicle parameters. Energy limits and thermal assumptions represent a generic hybrid race-car model.', inputContractTitle:'4. Input data contract', outputContractTitle:'5. Model output contract', apiContractTitle:'6. API contract', columnHeader:'Column', meaningHeader:'Meaning', contractInputDescription:'FastF1 or synthetic telemetry input', contractOutputDescription:'Decision and telemetry fields produced by the energy model', apiContractCopy:'Session context, KPIs, live decisions, and chart series are returned by API endpoints.', openApiDocs:'Open API documentation' }});
   const setLanguage = language => {{
     document.documentElement.lang = language;
     localStorage.setItem('reo-language', language);
     document.querySelectorAll('[data-i18n]').forEach(node => {{ if (dictionary[language][node.dataset.i18n]) node.textContent = dictionary[language][node.dataset.i18n]; }});
+    document.querySelectorAll('[data-i18n-tr]').forEach(node => {{ node.textContent = language === 'en' ? node.dataset.i18nEn : node.dataset.i18nTr; }});
     document.getElementById('lang-tr').classList.toggle('active', language === 'tr');
     document.getElementById('lang-en').classList.toggle('active', language === 'en');
   }};
@@ -109,7 +113,7 @@ def _shell(title: str, body: str) -> str:
 </script></body></html>"""
 
 
-def _explorer_html(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
+def _explorer_html(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFrame, api_base: str) -> str:
     explorer = _data_explorer_panel(fixed_trace, predictive_trace).replace(
         '<details class="advanced-section">', '<details class="advanced-section" open>', 1
     )
@@ -123,22 +127,24 @@ def _explorer_html(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFrame) ->
         }})();
       </script>
     """
-    return _shell("Telemetry Explorer", body)
+    return _shell("Telemetry Explorer", body, api_base)
 
 
-def _guide_html(lap_data: LapData, config: EnergyConfig) -> str:
-    input_rows = "".join(f"<tr><td><code>{escape(column)}</code></td><td>FastF1 veya synthetic telemetry girdisi</td></tr>" for column in REQUIRED_INPUT_COLUMNS)
-    model_rows = "".join(f"<tr><td><code>{escape(column)}</code></td><td>Enerji modeli tarafından üretilen karar/telemetri alanı</td></tr>" for column in MODEL_COLUMNS)
+def _guide_html(lap_data: LapData, config: EnergyConfig, api_base: str) -> str:
+    input_rows = "".join(f"<tr><td><code>{escape(column)}</code></td><td data-i18n=\"contractInputDescription\">FastF1 veya sentetik telemetri girdisi</td></tr>" for column in REQUIRED_INPUT_COLUMNS)
+    model_rows = "".join(f"<tr><td><code>{escape(column)}</code></td><td data-i18n=\"contractOutputDescription\">Enerji modeli tarafından üretilen karar ve telemetri alanı</td></tr>" for column in MODEL_COLUMNS)
     notes = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
     body = f"""
       <section class="hero"><h1 data-i18n="guideTitle">Kılavuz ve Veri Sözleşmesi</h1><p data-i18n="guideCopy">Nasıl kullanılır / Model varsayımları / Veri sözleşmesi</p></section>
       <div class="grid">
         <section class="panel"><h2 data-i18n="howToTitle">1. Nasıl kullanılır?</h2><ol><li data-i18n="howTo1">Önce Dashboard sayfasından yıl, pist, oturum ve sürücüyü seç.</li><li data-i18n="howTo2">Canlı karar konsolunda komut, gerekçe, SoC, sıcaklık ve clipping riskini izle.</li><li data-i18n="howTo3">Grafikteki kırmızı imleç aracın tur içindeki mevcut konumunu gösterir.</li><li data-i18n="howTo4">Ham kayıtları karşılaştırmak için Telemetry sayfasına geç.</li></ol></section>
-        <section class="panel"><h2 data-i18n="logicTitle">2. Karar mantığı</h2><p data-i18n="logicCopy">Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.</p><ul><li><b>Deploy:</b> enerji değeri yüksek hızlanma bölgesinde güç kullan.</li><li><b>Regen:</b> frenleme enerjisini sonraki deploy fırsatı için geri kazan.</li><li><b>Thermal protect:</b> batarya sıcaklık payını koru.</li><li><b>Energy hold:</b> clipping riski veya bitiş rezervi nedeniyle mevcut haritayı koru.</li></ul></section>
+        <section class="panel"><h2 data-i18n="logicTitle">2. Karar mantığı</h2><p data-i18n="logicCopy">Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.</p><ul><li><b>Deploy:</b> enerji değeri yüksek hızlanma bölgesinde güç kullan.</li><li><b>Regen:</b> frenleme enerjisini sonraki deploy fırsatı için geri kazan.</li><li><b>Thermal protect:</b> batarya sıcaklık payını koru.</li><li><b>Energy hold:</b> potansiyel enerji açığı veya bitiş rezervi nedeniyle mevcut haritayı koru.</li></ul></section>
       </div>
-      <section class="panel"><h2>3. Veri kaynağı ve sınırlar</h2><p><b>Mevcut kaynak:</b> {escape(lap_data.source)}. {escape(lap_data.source_detail)}</p><p>Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.</p><p>Senaryo: ortam {config.ambient_temp_c:.1f}C, başlangıç SoC {config.initial_soc_mj:.2f} MJ, başlangıç batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.</p><ul>{notes}</ul></section>
-      <section class="panel"><h2>4. Girdi veri sözleşmesi</h2><table class="contract"><thead><tr><th>Kolon</th><th>Anlam</th></tr></thead><tbody>{input_rows}</tbody></table></section>
-      <section class="panel"><h2>5. Model çıktı sözleşmesi</h2><table class="contract"><thead><tr><th>Kolon</th><th>Anlam</th></tr></thead><tbody>{model_rows}</tbody></table></section>
-      <section class="panel"><h2>6. API sözleşmesi</h2><p><code>GET /api/session</code> oturum bağlamını, <code>GET /api/metrics</code> özet KPI’ları, <code>GET /api/decision?index=n</code> canlı kararı, <code>GET /api/trace</code> seçilen grafik serilerini döndürür.</p><p><a href="http://127.0.0.1:8001/docs">FastAPI OpenAPI dokümantasyonunu aç</a></p></section>
+      <section class="panel"><h2 data-i18n="mainQuestion">Bu panel neyi cevaplıyor?</h2><p data-i18n="mainAnswer">Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?</p><div class="grid"><div><b data-i18n="stepObserve">1. Veriyi oku</b><p data-i18n="stepObserveCopy">Pist segmenti, hız, SoC ve batarya sıcaklığını izler.</p></div><div><b data-i18n="stepPredict">2. İleriyi tahmin et</b><p data-i18n="stepPredictCopy">Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.</p></div><div><b data-i18n="stepDecide">3. Karar ver</b><p data-i18n="stepDecideCopy">Deploy, regen veya enerji koruma komutunu üretir.</p></div></div></section>
+      <section class="panel"><h2 data-i18n="readingGuide">Nasıl okunmalı?</h2><p data-i18n="readingGuideCopy">Önce KPI ve canlı konsola bak. Sonra grafik, karar akışı ve karşılaştırma tablosuyla kararın nedenini incele.</p></section>
+      <section class="panel"><h2 data-i18n="sourceLimitsTitle">3. Veri kaynağı ve sınırlar</h2><p><b data-i18n="currentSource">Mevcut kaynak:</b> {escape(lap_data.source)}. {escape(lap_data.source_detail)}</p><p data-i18n="sourceLimitsCopy">Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.</p><p data-i18n-tr="Senaryo: ortam {config.ambient_temp_c:.1f}C, başlangıç SoC {config.initial_soc_mj:.2f} MJ, başlangıç batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s." data-i18n-en="Scenario: ambient {config.ambient_temp_c:.1f}C, initial SoC {config.initial_soc_mj:.2f} MJ, initial battery {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.">Senaryo: ortam {config.ambient_temp_c:.1f}C, başlangıç SoC {config.initial_soc_mj:.2f} MJ, başlangıç batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.</p><ul>{notes}</ul></section>
+      <section class="panel"><h2 data-i18n="inputContractTitle">4. Girdi veri sözleşmesi</h2><table class="contract"><thead><tr><th data-i18n="columnHeader">Kolon</th><th data-i18n="meaningHeader">Anlam</th></tr></thead><tbody>{input_rows}</tbody></table></section>
+      <section class="panel"><h2 data-i18n="outputContractTitle">5. Model çıktı sözleşmesi</h2><table class="contract"><thead><tr><th data-i18n="columnHeader">Kolon</th><th data-i18n="meaningHeader">Anlam</th></tr></thead><tbody>{model_rows}</tbody></table></section>
+      <section class="panel"><h2 data-i18n="apiContractTitle">6. API sözleşmesi</h2><p data-i18n="apiContractCopy"><code>GET /api/session</code> oturum bağlamını, <code>GET /api/metrics</code> özet KPI’ları, <code>GET /api/decision?index=n</code> canlı kararı, <code>GET /api/trace</code> seçilen grafik serilerini döndürür.</p><p><a data-i18n="openApiDocs" href="{escape(api_base)}/docs">API OpenAPI dokümantasyonunu aç</a></p></section>
     """
-    return _shell("Guide & Data Contract", body)
+    return _shell("Guide & Data Contract", body, api_base)

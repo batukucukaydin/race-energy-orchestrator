@@ -18,11 +18,21 @@ def compute_metrics(trace: pd.DataFrame, config: EnergyConfig) -> dict[str, floa
     regen_loss_s = float((trace["regen_kw"] * trace["dt_s"] / 1000.0 * config.regen_time_loss_s_per_mj).sum())
     clipping_duration_s = float(trace.loc[trace["clipping"], "dt_s"].sum())
     thermal_limited_duration_s = float(trace.loc[trace["thermal_limited"], "dt_s"].sum())
-    clipping_loss_s = clipping_duration_s * 0.024
+    clipping_loss_s = float(
+        (
+            trace["speed_loss_kmh"]
+            / trace["speed_kmh"].clip(lower=1.0)
+            * trace["dt_s"]
+        ).sum()
+    )
     thermal_loss_s = thermal_limited_duration_s * config.thermal_time_loss_s_per_s
     total_deploy_mj = float((trace["deploy_kw"] * trace["dt_s"] / 1000.0).sum())
     total_regen_mj = float((trace["regen_kw"] * trace["dt_s"] / 1000.0).sum())
-    energy_utilization_pct = min(100.0, total_deploy_mj / max(config.usable_energy_mj, 1e-6) * 100.0)
+    total_time_s = max(float(trace["dt_s"].sum()), 1e-6)
+    deploy_intensity_pct = min(
+        100.0,
+        total_deploy_mj / (config.mgu_k_deploy_limit_kw * total_time_s / 1000.0) * 100.0,
+    )
     clipping_control_score = max(0.0, 100.0 - clipping_duration_s * 2.5 - thermal_limited_duration_s * 1.2)
 
     lap_time_proxy_s = base_lap_time - deploy_gain_s + regen_loss_s + clipping_loss_s + thermal_loss_s
@@ -33,6 +43,7 @@ def compute_metrics(trace: pd.DataFrame, config: EnergyConfig) -> dict[str, floa
         "deploy_gain_s": deploy_gain_s,
         "regen_loss_s": regen_loss_s,
         "clipping_duration_s": clipping_duration_s,
+        "clipping_loss_proxy_s": clipping_loss_s,
         "thermal_limited_duration_s": thermal_limited_duration_s,
         "max_speed_loss_kmh": float(trace["speed_loss_kmh"].max()),
         "end_soc_mj": float(trace["soc_mj"].iloc[-1]),
@@ -42,7 +53,8 @@ def compute_metrics(trace: pd.DataFrame, config: EnergyConfig) -> dict[str, floa
         "max_clipping_risk": float(trace["clipping_risk"].max()),
         "total_deploy_mj": total_deploy_mj,
         "total_regen_mj": total_regen_mj,
-        "energy_utilization_pct": energy_utilization_pct,
+        "deploy_intensity_pct": deploy_intensity_pct,
+        "energy_turnover_mj": total_deploy_mj + total_regen_mj,
         "clipping_control_score": clipping_control_score,
     }
 

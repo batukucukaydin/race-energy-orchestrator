@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from .config import EnergyConfig, MODEL_COLUMNS, REQUIRED_INPUT_COLUMNS
+from .config import EnergyConfig, F1_2026_EVENTS, MODEL_COLUMNS, REQUIRED_INPUT_COLUMNS, SUPPORTED_YEAR, event_data_available
 from .data import LapData
 from .live import build_live_decision_feed
 
@@ -23,10 +23,11 @@ def render_report(
     config: EnergyConfig,
     output_path: str | Path,
     scenario_comparison: pd.DataFrame | None = None,
-    year: int = 2024,
-    event: str = "Monza",
+    year: int = SUPPORTED_YEAR,
+    event: str = "Suzuka",
     session_name: str = "Q",
     driver: str = "LEC",
+    api_base: str = "http://localhost:8001",
 ) -> Path:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -36,9 +37,10 @@ def render_report(
     live_feed = build_live_decision_feed(predictive_trace, config)
     selection_query = "?" + urlencode({"year": year, "event": event, "session_name": session_name, "driver": driver})
     notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
+    event_options = _event_options(event)
 
     html = f"""<!doctype html>
-<html lang="tr">
+<html lang="tr" data-api-base="{escape(api_base)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -197,6 +199,7 @@ def render_report(
     .live-decision {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 14px; }}
     .live-command {{ min-height: 176px; padding: 18px; border-radius: 7px; border-left: 5px solid var(--teal); background: #20252c; }}
     .live-command.warning {{ border-left-color: var(--amber); }}
+    .live-command.advisory {{ border-left-color: var(--blue); }}
     .live-command.critical {{ border-left-color: var(--red); }}
     .live-command small {{ display: block; color: #b8c0c8; font-weight: 800; text-transform: uppercase; }}
     .live-command b {{ display: block; margin: 12px 0 8px; font-size: clamp(26px, 4vw, 44px); line-height: 1; }}
@@ -288,6 +291,24 @@ def render_report(
       gap: 12px;
       min-width: 0;
     }}
+    .compact-hero {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-height: 76px;
+      padding: 14px 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }}
+    .compact-hero h1 {{ margin: 4px 0 0; font-size: 22px; line-height: 1.15; }}
+    .compact-hero p {{ margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }}
+    .compact-hero .eyebrow {{ padding: 0; background: transparent; color: var(--red); font-size: 11px; letter-spacing: .04em; }}
+    .compact-hero-meta {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-align: right; }}
+    .data-status {{ margin: 12px 0; padding: 12px 14px; border: 1px solid #c58a28; border-left: 4px solid #c58a28; border-radius: 7px; background: #fff8e7; color: #68470d; font-size: 13px; }}
+    [data-theme="dark"] .data-status {{ background: #332a18; color: #f4d38a; border-color: #bd8421; }}
     .metric {{
       min-height: 124px;
       padding: 16px;
@@ -516,6 +537,8 @@ def render_report(
       .shell, .hero, .grid, .purpose, .live-decision {{ grid-template-columns: 1fr; }}
       aside {{ position: relative; min-height: auto; top: 0; }}
       .hero-main {{ min-height: 300px; }}
+      .compact-hero {{ align-items: flex-start; flex-direction: column; }}
+      .compact-hero-meta {{ justify-content: flex-start; text-align: left; }}
       .session-context {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .resource-links {{ grid-template-columns: 1fr; }}
       .selection-bar {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -533,6 +556,7 @@ def render_report(
       .explorer-controls input[type="search"] {{ min-width: 0; width: 100%; }}
       .command {{ grid-template-columns: 1fr; }}
       .hero-main {{ min-height: 260px; padding: 26px 18px; }}
+      .compact-hero h1 {{ font-size: 20px; }}
       .session-context {{ grid-template-columns: 1fr; }}
       .selection-bar {{ grid-template-columns: 1fr; }}
       h1 {{ max-width: min(320px, calc(100vw - 76px)); font-size: 34px; line-height: 1.02; }}
@@ -563,14 +587,15 @@ def render_report(
       </div>
     </aside>
     <section class="content">
-      <div class="hero">
-        <div class="hero-main">
-          <span class="eyebrow" data-i18n="productName">Race Energy Orchestrator</span>
-          <h1 data-i18n="heroTitle">Enerji kararlarını daha hızlı tur için yönet.</h1>
-          <p data-i18n="heroCopy">Sistem, sabit enerji haritasını öngörülü orkestrasyonla karşılaştırır ve aracın enerjiyi nerede kullanacağına karar verir.</p>
+      <div class="compact-hero">
+        <div>
+          <span class="eyebrow" data-i18n="productName">REO · Race Energy Orchestrator</span>
+          <h1 data-i18n="heroTitle">Enerji karar kokpiti</h1>
+          <p data-i18n="heroCopy">Sabit harita ve predictive orchestration karşılaştırması.</p>
         </div>
-        <div class="hero-metrics">
-          {_kpi_cards(metrics, predictive_trace)}
+        <div class="compact-hero-meta">
+          <span id="reo-compact-session">{escape(event)} · {escape(session_name)} · {escape(driver)}</span>
+          <span data-i18n="compactStatus">Operational view</span>
         </div>
       </div>
 
@@ -581,10 +606,11 @@ def render_report(
         <div><span data-i18n="driverLabel">Driver</span><b id="reo-driver-label">{escape(driver)}</b></div>
         <div><span data-i18n="apiLabel">API durumu</span><b id="reo-api-state">Kontrol ediliyor</b></div>
       </section>
+      <div id="reo-data-status" class="data-status" hidden></div>
 
       <form class="selection-bar" id="reo-selection-form">
-        <label><span data-i18n="yearLabel">Yıl / Year</span><select id="reo-year-select"><option>2024</option><option>2025</option><option>2026</option></select></label>
-        <label><span data-i18n="eventSelectLabel">Yarış / Track</span><select id="reo-event-select"><option value="Monza">Monza</option><option value="Spa-Francorchamps">Spa-Francorchamps</option><option value="Silverstone">Silverstone</option><option value="Suzuka">Suzuka</option></select></label>
+        <label><span data-i18n="yearLabel">Yıl / Year</span><select id="reo-year-select"><option value="2026">2026</option></select></label>
+        <label><span data-i18n="eventSelectLabel">Yarış / Track</span><select id="reo-event-select">{event_options}</select></label>
         <label>Session<select id="reo-session-select"><option value="Q">Qualifying</option><option value="R">Race</option><option value="FP1">FP1</option><option value="FP2">FP2</option><option value="FP3">FP3</option></select></label>
         <label>Driver<select id="reo-driver-select"><option value="LEC">LEC</option><option value="VER">VER</option><option value="NOR">NOR</option><option value="HAM">HAM</option></select></label>
         <button type="submit" data-i18n="loadData">Veriyi yükle</button>
@@ -592,7 +618,7 @@ def render_report(
       <script>
         (() => {{
           const query = new URLSearchParams(window.location.search);
-          const selection = {{ year: query.get('year') || '2024', event: query.get('event') || 'Monza', session_name: query.get('session_name') || query.get('session') || 'Q', driver: query.get('driver') || 'LEC' }};
+          const selection = {{ year: '2026', event: query.get('event') || 'Suzuka', session_name: query.get('session_name') || query.get('session') || 'Q', driver: query.get('driver') || 'LEC' }};
           window.reoSelectionQuery = new URLSearchParams(selection).toString();
           const setValue = (id, value) => {{ const node = document.getElementById(id); if (node) node.value = value; }};
           setValue('reo-year-select', selection.year);
@@ -607,20 +633,45 @@ def render_report(
         }})();
       </script>
 
+      <script>
+        window.reoConfig = {{ battery_soft_limit_c: {config.battery_soft_limit_c}, horizon_s: {config.horizon_s}, target_finish_soc_mj: {config.target_finish_soc_mj} }};
+      </script>
+
+      <div class="hero-metrics data-dependent">
+        {_kpi_cards(metrics, predictive_trace, config)}
+      </div>
+
       {_live_decision_console(live_feed, lap_data.source)}
 
       <script>
         (() => {{
-          const apiBase = 'http://localhost:8001';
+          const apiBase = document.documentElement.dataset.apiBase || new URLSearchParams(window.location.search).get('api_base') || '';
+          window.reoApiBase = apiBase;
           const selectedQuery = window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
           const setText = (id, value) => {{ const node = document.getElementById(id); if (node) node.textContent = value; }};
+          const setDataAvailability = (state, message = '') => {{
+            const status = document.getElementById('reo-data-status');
+            const live = state === 'live';
+            const future = state === 'future';
+            if (status) {{ status.hidden = live; status.textContent = message; }}
+            document.querySelectorAll('.data-dependent').forEach(node => {{ node.hidden = future; }});
+            if (live) setText('reo-api-state', 'LIVE');
+          }};
           const syncDashboardContext = async () => {{
             try {{
               const [sessionResponse, metricsResponse] = await Promise.all([
                 fetch(`${{apiBase}}/api/session${{selectedQuery}}`, {{ cache: 'no-store' }}),
                 fetch(`${{apiBase}}/api/metrics${{selectedQuery}}`, {{ cache: 'no-store' }})
               ]);
+              if (sessionResponse.status === 409 || metricsResponse.status === 409) {{
+                const response = sessionResponse.status === 409 ? sessionResponse : metricsResponse;
+                const detail = await response.json();
+                setDataAvailability('future', `VERİ MEVCUT DEĞİL · ${{detail.detail || 'Bu yarış henüz tamamlanmadı.'}}`);
+                setText('reo-api-state', 'VERİ YOK');
+                return;
+              }}
               if (!sessionResponse.ok || !metricsResponse.ok) throw new Error('API unavailable');
+              setDataAvailability('live');
               const session = await sessionResponse.json();
               const metricPayload = await metricsResponse.json();
               const rows = metricPayload.rows || [];
@@ -633,18 +684,23 @@ def render_report(
               setText('reo-event-label', `${{session.year}} ${{session.event}}`);
               setText('reo-session-label', session.session_name);
               setText('reo-driver-label', session.driver);
+              setText('reo-compact-session', `${{session.event}} · ${{session.session_name}} · ${{session.driver}}`);
               setText('reo-side-source', session.data_source);
               setText('reo-source-detail', session.source_detail);
               setText('reo-api-state', `LIVE · ${{session.data_mode}}`);
+              window.reoConfig = {{ battery_soft_limit_c: Number(session.battery_soft_limit_c), horizon_s: Number(session.horizon_s), target_finish_soc_mj: Number(session.target_finish_soc_mj) }};
               setText('reo-kpi-lap', `${{lapDelta.toFixed(3)}}s`);
               setText('reo-kpi-clipping', `${{clippingDelta.toFixed(1)}}s`);
-              setText('reo-kpi-soc', `${{(Number(predictive.end_soc_mj) / 4 * 100).toFixed(1)}}%`);
+              const socRange = Math.max(Number(session.usable_energy_mj) - Number(session.minimum_soc_mj), 0.0001);
+              const finishSocPct = (Number(predictive.end_soc_mj) - Number(session.minimum_soc_mj)) / socRange * 100;
+              setText('reo-kpi-soc', `${{finishSocPct.toFixed(1)}}%`);
               setText('reo-kpi-soc-detail', `${{Number(predictive.end_soc_mj).toFixed(3)}} MJ`);
               setText('reo-side-lap', `${{lapDelta.toFixed(3)}} s`);
               setText('reo-side-clipping', `${{Number(predictive.clipping_duration_s).toFixed(3)}} s`);
               setText('reo-side-risk', Number(predictive.max_clipping_risk).toFixed(2));
             }} catch (error) {{
-              setText('reo-api-state', 'EMBEDDED FALLBACK');
+              setDataAvailability('embedded', 'ÇEVRİMDIŞI · Gömülü örnek veri gösteriliyor.');
+              setText('reo-api-state', document.documentElement.lang === 'en' ? 'OFFLINE · EMBEDDED' : 'ÇEVRİMDIŞI · GÖMÜLÜ');
             }}
           }};
           syncDashboardContext();
@@ -652,38 +708,13 @@ def render_report(
         }})();
       </script>
 
-      <div class="purpose">
-        <div class="purpose-card">
-          <h2 data-i18n="mainQuestion">Bu panel neyi cevaplıyor?</h2>
-          <p data-i18n="mainAnswer">Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?</p>
-          <div class="decision-flow">
-            <div class="decision-step"><b data-i18n="stepObserve">1. Veriyi oku</b><span data-i18n="stepObserveCopy">Pist segmenti, hız, SoC ve batarya sıcaklığını izler.</span></div>
-            <div class="decision-step"><b data-i18n="stepPredict">2. İleriyi tahmin et</b><span data-i18n="stepPredictCopy">Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.</span></div>
-            <div class="decision-step"><b data-i18n="stepDecide">3. Karar ver</b><span data-i18n="stepDecideCopy">Deploy, regen veya enerji koruma komutunu üretir.</span></div>
-          </div>
-        </div>
-        <div class="purpose-card">
-          <h2 data-i18n="readingGuide">Nasıl okunmalı?</h2>
-          <p data-i18n="readingGuideCopy">Önce üstteki sonuçlara bak. Orchestrator satırı sabit haritadan daha iyi ise strateji avantaj sağlıyor. Sonra karar akışı ve telemetriyi açarak nedenini incele.</p>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2 data-i18n="insightTitle">Ana sonuç</h2>
-        {_orchestrator_insights(metrics, predictive_trace, config)}
-      </div>
-
-      {_support_links(selection_query)}
-
-      {_scenario_comparison_panel(scenario_comparison)}
-
-      <div class="panel">
+      <div class="panel data-dependent">
         <h2 data-i18n="trackTitle">Pistte enerji planı</h2>
         {_track_ribbon(base_frame)}
       </div>
 
       <div class="grid">
-        <div class="panel plot-panel">
+        <div class="panel plot-panel data-dependent">
           <h2 data-i18n="telemetryTitle">Strateji grafiği / Oturum snapshot'ı</h2>
           <p class="panel-note" data-i18n="telemetryNote">Grafik, API oturumundan üretilen karşılaştırma snapshot'ıdır. Canlı karar ve KPI değerleri API'den güncellenir.</p>
           {plot_html}
@@ -721,15 +752,86 @@ def render_report(
               }};
               window.reoUpdateTelemetry = updateTelemetry;
               if (window.reoLiveRow) updateTelemetry(window.reoLiveRow);
+              const html = value => String(value).replace(/[&<>\"']/g, character => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}}[character]));
+              const number = (value, digits = 3) => Number(value || 0).toFixed(digits);
+              const renderMetrics = rows => {{
+                const body = document.getElementById('reo-metrics-body');
+                if (!body) return;
+                const labels = ['Sabit harita', 'Orchestrator'];
+                const keys = ['lap_time_proxy_s','clipping_duration_s','clipping_loss_proxy_s','thermal_limited_duration_s','max_speed_loss_kmh','end_soc_mj','unused_energy_mj','max_battery_temp_c','total_deploy_mj','total_regen_mj','deploy_intensity_pct','clipping_control_score'];
+                body.innerHTML = rows.map((row, index) => `<tr><td>${{labels[index] || html(row.strategy)}}</td>${{keys.map(key => `<td>${{number(row[key])}}</td>`).join('')}}</tr>`).join('');
+              }};
+              const renderSegments = rows => {{
+                const body = document.getElementById('reo-segment-body');
+                if (!body || !rows?.length) return;
+                const grouped = new Map();
+                rows.forEach((row, index) => {{
+                  const key = `${{row.segment_type}}|${{row.aero_mode}}`;
+                  const previous = rows[index - 1];
+                  const distance = index && previous ? Math.max(0, Number(row.distance_m) - Number(previous.distance_m)) : 0;
+                  const duration = index && previous ? Math.max(0, Number(row.time_s) - Number(previous.time_s)) : 0;
+                  const item = grouped.get(key) || {{ segment_type: row.segment_type, aero_mode: row.aero_mode, distance: 0, duration: 0, speed: 0, count: 0 }};
+                  item.distance += distance; item.duration += duration; item.speed += Number(row.speed_kmh); item.count += 1;
+                  grouped.set(key, item);
+                }});
+                body.innerHTML = [...grouped.values()].map(item => `<tr><td>${{html(item.segment_type)}}</td><td>${{html(item.aero_mode)}}</td><td>${{number(item.distance, 2)}}</td><td>${{number(item.duration, 2)}}</td><td>${{number(item.speed / Math.max(item.count, 1), 2)}}</td></tr>`).join('');
+              }};
+              const renderTimeline = rows => {{
+                const target = document.getElementById('reo-command-timeline');
+                if (!target || !rows?.length) return;
+                const changes = rows.filter((row, index) => index === 0 || row.driver_command !== rows[index - 1].driver_command).slice(0, 22);
+                target.innerHTML = changes.map(row => `<div class="command"><time>${{number(row.time_s, 1)}}s<br>${{number(row.distance_m, 0)}}m</time><div><span class="pill">${{html(row.driver_command)}}</span><b>Risk ${{number(row.clipping_risk, 2)}} | SoC ${{number(row.soc_mj, 2)}} MJ</b></div></div>`).join('');
+              }};
+              let lastInsightRows = [];
+              let lastInsightTrace = [];
+              const insightCopy = {{
+                tr: {{ gain: 'Orkestrasyon kazancı', gainCopy: 'Sabit haritaya karşı tur süresi iyileşmesi.', control: 'Clipping kontrolü', controlled: 'Kontrol altında', monitor: 'Risk izlenmeli', reduced: 'clipping süresi azaltıldı.', intensity: 'Deploy yoğunluğu', energyCopy: 'deploy, {{regen}} regen.', mode: 'Karar modu', dominant: 'Tur örneklerinin {{share}}% bölümünde baskın komut.', thermal: 'Termal pay', thermalCopy: 'Yumuşak limite göre kalan batarya sıcaklık alanı.', score: 'Kontrol skoru', scoreCopy: 'Clipping ve termal limit sürelerinden türetilen karar kalitesi.', lookahead: 'Lookahead', lookaheadCopy: 'Yaklaşan uzun düzlükler için enerji rezerv ufku.', finalSoc: 'Final SoC', finishCopy: 'Hedef finish rezervi {{target}} MJ.' }},
+                en: {{ gain: 'Orchestration gain', gainCopy: 'Lap time improvement versus the fixed map.', control: 'Clipping control', controlled: 'Under control', monitor: 'Risk monitored', reduced: 'of clipping time reduced.', intensity: 'Deploy intensity', energyCopy: 'deploy, {{regen}} regen.', mode: 'Decision mode', dominant: 'Dominant command across {{share}}% of lap samples.', thermal: 'Thermal headroom', thermalCopy: 'Battery temperature margin to the soft limit.', score: 'Control score', scoreCopy: 'Decision quality derived from clipping and thermal-limit time.', lookahead: 'Lookahead', lookaheadCopy: 'Energy reserve horizon for upcoming long straights.', finalSoc: 'Final SoC', finishCopy: 'Target finish reserve: {{target}} MJ.' }}
+              }};
+              const renderInsights = (rows, trace) => {{
+                lastInsightRows = rows || [];
+                lastInsightTrace = trace || [];
+                const target = document.getElementById('reo-insights');
+                if (!target || !rows?.length || !trace?.length) return;
+                const fixed = rows.find(row => row.strategy === 'fixed_map');
+                const predictive = rows.find(row => row.strategy === 'predictive_mpc');
+                if (!fixed || !predictive) return;
+                const lapDelta = Number(fixed.lap_time_proxy_s) - Number(predictive.lap_time_proxy_s);
+                const clippingDelta = Number(fixed.clipping_duration_s) - Number(predictive.clipping_duration_s);
+                const counts = trace.reduce((map, row) => {{ map[row.driver_command] = (map[row.driver_command] || 0) + 1; return map; }}, {{}});
+                const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || ['ENERGY HOLD', 0];
+                const copy = insightCopy[document.documentElement.lang === 'en' ? 'en' : 'tr'];
+                const riskState = Number(predictive.clipping_duration_s) <= 0.05 ? copy.controlled : copy.monitor;
+                const runtime = window.reoConfig || {{ battery_soft_limit_c: 58, horizon_s: 30, target_finish_soc_mj: 0.45 }};
+                const share = number(Number(top[1]) / trace.length * 100, 1);
+                target.innerHTML = `<div class="insight"><span>${{copy.gain}}</span><b>${{number(lapDelta)}}s</b><p>${{copy.gainCopy}}</p></div><div class="insight"><span>${{copy.control}}</span><b>${{riskState}}</b><p>${{number(clippingDelta, 2)}}s ${{copy.reduced}}</p></div><div class="insight"><span>${{copy.intensity}}</span><b>${{number(predictive.deploy_intensity_pct, 1)}}%</b><p>${{number(predictive.total_deploy_mj, 2)}} MJ ${{copy.energyCopy.replace('{{regen}}', number(predictive.total_regen_mj, 2))}}</p></div><div class="insight"><span>${{copy.mode}}</span><b>${{html(top[0])}}</b><p>${{copy.dominant.replace('{{share}}', share)}}</p></div><div class="insight"><span>${{copy.thermal}}</span><b>${{number(Number(runtime.battery_soft_limit_c) - Number(predictive.max_battery_temp_c), 1)}}C</b><p>${{copy.thermalCopy}}</p></div><div class="insight"><span>${{copy.score}}</span><b>${{number(predictive.clipping_control_score, 1)}}</b><p>${{copy.scoreCopy}}</p></div><div class="insight"><span>${{copy.lookahead}}</span><b>${{number(runtime.horizon_s, 0)}}s</b><p>${{copy.lookaheadCopy}}</p></div><div class="insight"><span>${{copy.finalSoc}}</span><b>${{number(predictive.end_soc_mj, 2)}} MJ</b><p>${{copy.finishCopy.replace('{{target}}', number(runtime.target_finish_soc_mj, 2))}}</p></div>`;
+              }};
+              const renderScenarios = rows => {{
+                const body = document.getElementById('reo-scenario-body');
+                if (!body || !rows?.length) return;
+                const effective = document.documentElement.lang === 'en' ? ['Effective', 'Review'] : ['Etkili', 'İncelenmeli'];
+                body.innerHTML = rows.map(row => `<tr><td><b>${{html(String(row.scenario).replace('_', ' '))}}</b></td><td>${{number(row.ambient_temp_c, 1)}}C</td><td>${{number(row.lap_gain_s)}}s</td><td>${{number(row.clipping_reduction_s)}}s</td><td>${{number(row.orchestrator_thermal_limit_s)}}s</td><td>${{number(row.orchestrator_end_soc_mj)}} MJ</td><td><span class="pill${{row.effective ? '' : ' warning'}}">${{row.effective ? effective[0] : effective[1]}}</span></td></tr>`).join('');
+              }};
               const updatePlotForSelection = async () => {{
                 const plot = document.getElementById('reo-telemetry-plot');
                 if (!plot || !window.Plotly) return;
                 try {{
-                  const response = await fetch(`http://localhost:8001/api/trace${{selectedQuery}}`, {{ cache: 'no-store' }});
-                  if (!response.ok) throw new Error('Trace unavailable');
-                  const payload = await response.json();
+                  const [traceResponse, metricsResponse, scenarioResponse] = await Promise.all([
+                    fetch(`${{window.reoApiBase}}/api/trace${{selectedQuery}}`, {{ cache: 'no-store' }}),
+                    fetch(`${{window.reoApiBase}}/api/metrics${{selectedQuery}}`, {{ cache: 'no-store' }}),
+                    fetch(`${{window.reoApiBase}}/api/scenarios${{selectedQuery}}`, {{ cache: 'no-store' }})
+                  ]);
+                  if (!traceResponse.ok || !metricsResponse.ok) throw new Error('Track analysis unavailable');
+                  const payload = await traceResponse.json();
+                  const metricPayload = await metricsResponse.json();
+                  const scenarioPayload = scenarioResponse.ok ? await scenarioResponse.json() : [];
                   const fixed = payload.fixed_map;
                   const predictive = payload.predictive_mpc;
+                  renderMetrics(metricPayload.rows || []);
+                  renderSegments(predictive);
+                  renderTimeline(predictive);
+                  renderInsights(metricPayload.rows || [], predictive);
+                  renderScenarios(scenarioPayload);
                   const x = predictive.map(row => row.distance_m);
                   const updates = [
                     {{ x: [x], y: [predictive.map(row => row.speed_kmh)] }},
@@ -752,27 +854,37 @@ def render_report(
                 }} catch (error) {{
                   console.warn('Trace API unavailable; keeping embedded chart.', error);
                 }}
+              window.addEventListener('reo-language-change', () => {{ renderInsights(lastInsightRows, lastInsightTrace); }});
               }};
               updatePlotForSelection();
             }})();
           </script>
         </div>
-        <div class="panel">
+        <div class="panel data-dependent">
           <h2 data-i18n="commandsTitle">Sistemin verdiği kararlar</h2>
           {_command_timeline(predictive_trace)}
         </div>
       </div>
 
       <div class="grid">
-        <div class="panel">
+        <div class="panel data-dependent">
           <h2 data-i18n="comparisonTitle">Sabit harita / Orchestrator</h2>
           {_format_metrics(metrics)}
         </div>
-        <div class="panel">
+        <div class="panel data-dependent">
           <h2 data-i18n="segmentTitle">Pist segmentleri</h2>
           {_segment_summary(base_frame)}
         </div>
       </div>
+
+      <div class="panel data-dependent">
+        <h2 data-i18n="insightTitle">Ana sonuç</h2>
+        {_orchestrator_insights(metrics, predictive_trace, config)}
+      </div>
+
+      {_scenario_comparison_panel(scenario_comparison)}
+
+      {_support_links(selection_query)}
 
     </section>
   </div>
@@ -783,10 +895,13 @@ def render_report(
       tr: {{ navDashboard: "Dashboard", navTelemetry: "Telemetry", navGuide: "Guide", sourceLabel: "Veri kaynağı", yearLabel: "Yıl / Year", eventSelectLabel: "Yarış / Track", loadData: "Veriyi yükle", panelPurpose: "Race Energy Orchestrator / Enerji karar paneli", productName: "Race Energy Orchestrator", heroTitle: "Enerji kararlarını daha hızlı tur için yönet.", heroCopy: "Sistem, sabit enerji haritasını öngörülü orkestrasyonla karşılaştırır ve aracın enerjiyi nerede kullanacağına karar verir.", mainQuestion: "Bu panel neyi cevaplıyor?", mainAnswer: "Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?", stepObserve: "1. Veriyi oku", stepObserveCopy: "Pist segmenti, hız, SoC ve batarya sıcaklığını izler.", stepPredict: "2. İleriyi tahmin et", stepPredictCopy: "Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.", stepDecide: "3. Karar ver", stepDecideCopy: "Deploy, regen veya enerji koruma komutunu üretir.", readingGuide: "Nasıl okunmalı?", readingGuideCopy: "Önce üstteki sonuçlara bak. Orchestrator satırı sabit haritadan daha iyi ise strateji avantaj sağlıyor. Sonra karar akışı ve telemetriyi açarak nedenini incele.", insightTitle: "Ana sonuç", trackTitle: "Pistte enerji planı", telemetryTitle: "Strateji grafiği / Oturum özeti", telemetryNote: "Grafik, API oturumundan üretilen karşılaştırma özetidir. Canlı karar ve KPI değerleri API'den güncellenir.", trackLabel: "Pist", eventLabel: "Yarış", sessionLabel: "Oturum", driverLabel: "Sürücü", apiLabel: "API durumu", commandsTitle: "Sistemin verdiği kararlar", comparisonTitle: "Sabit harita / Orchestrator", segmentTitle: "Pist segmentleri", assumptionsTitle: "Model varsayımları ve veri sözleşmesi", scenarioTitle: "Senaryo doğrulaması", rawDataTitle: "Ham telemetriyi incele", rawDataHeading: "Telemetri veri gezgini", rawDataCopy: "Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.", strategyFilter: "Strateji", allOption: "Tümü", fixedOption: "Sabit harita", searchFilter: "Arama", incidentFilter: "Clipping / termal limit", clearFilters: "Filtreleri temizle" }},
       en: {{ navDashboard: "Dashboard", navTelemetry: "Telemetry", navGuide: "Guide", sourceLabel: "Data source", yearLabel: "Year", eventSelectLabel: "Event / Track", loadData: "Load data", panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", productName: "Race Energy Orchestrator", heroTitle: "Manage energy decisions for a faster lap.", heroCopy: "The system compares a fixed energy map with predictive orchestration and decides where the car should use its energy.", mainQuestion: "What question does this panel answer?", mainAnswer: "Across the lap, when should limited hybrid energy be deployed, regenerated, or protected?", stepObserve: "1. Read the data", stepObserveCopy: "Track segment, speed, SoC, and battery temperature are monitored.", stepPredict: "2. Look ahead", stepPredictCopy: "Long straights and braking zones are evaluated ahead of the car.", stepDecide: "3. Make the decision", stepDecideCopy: "The system produces deploy, regen, or energy-save commands.", readingGuide: "How should I read it?", readingGuideCopy: "Start with the results above. If the Orchestrator row beats the fixed map, the strategy has an advantage. Open the decision flow and telemetry to understand why.", insightTitle: "Key result", trackTitle: "Energy plan on track", telemetryTitle: "Strategy telemetry / Session snapshot", telemetryNote: "This chart is a comparison snapshot generated from the API session. Live decisions and KPI values are API-backed.", trackLabel: "Track", eventLabel: "Event", sessionLabel: "Session", driverLabel: "Driver", apiLabel: "API status", commandsTitle: "System decisions", comparisonTitle: "Fixed map / Orchestrator", segmentTitle: "Track segments", assumptionsTitle: "Model assumptions and data contract", scenarioTitle: "Scenario validation", rawDataTitle: "Inspect raw telemetry", rawDataHeading: "Telemetry data explorer", rawDataCopy: "The full decision stream lives here. Explore strategy, risk, and commands without opening a file.", strategyFilter: "Strategy", allOption: "All", fixedOption: "Fixed map", searchFilter: "Search", incidentFilter: "Clipping / thermal limit", clearFilters: "Clear filters" }}
     }};
-    Object.assign(dictionary.tr, {{ lapImprovement: "Tur süresi iyileşmesi", vsFixed: "Sabit haritaya göre", clippingReduction: "Clipping azalımı", orchestratorStrategy: "Orchestrator stratejisi", attackReadiness: "Atak hazırlığı", deployPoints: "Deploy komut noktası", previous: "Önceki", next: "Sonraki", orchestrationGain: "Orkestrasyon kazancı", lapGainCopy: "Sabit haritaya karşı tur süresi iyileşmesi.", clippingControl: "Clipping kontrolü", energyUse: "Enerji kullanımı", decisionMode: "Karar modu", dominantCommand: "Tur örneklerinin baskın komutu." }});
-    Object.assign(dictionary.en, {{ lapImprovement: "Lap time improvement", vsFixed: "Compared with fixed map", clippingReduction: "Clipping reduction", orchestratorStrategy: "Orchestrator strategy", attackReadiness: "Attack readiness", deployPoints: "Deploy command points", previous: "Previous", next: "Next", orchestrationGain: "Orchestration gain", lapGainCopy: "Lap time improvement versus the fixed map.", clippingControl: "Clipping control", energyUse: "Energy use", decisionMode: "Decision mode", dominantCommand: "Dominant command across lap samples." }});
+    Object.assign(dictionary.tr, {{ panelPurpose: "Race Energy Orchestrator / Enerji karar kokpiti", heroTitle: "Enerji karar kokpiti", heroCopy: "Sabit harita ve predictive orchestration karşılaştırması.", compactStatus: "Operasyon görünümü" }});
+    Object.assign(dictionary.en, {{ panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", heroTitle: "Energy decision cockpit", heroCopy: "Fixed-map and predictive orchestration comparison.", compactStatus: "Operational view" }});
+    Object.assign(dictionary.tr, {{ lapImprovement: "Tur süresi iyileşmesi", vsFixed: "Sabit haritaya göre", clippingReduction: "Clipping azalması", orchestratorStrategy: "Orchestrator stratejisi", regenEvents: "Regen olayları", regenPoints: "Regen karar noktası", previous: "Önceki", next: "Sonraki", orchestrationGain: "Orkestrasyon kazancı", lapGainCopy: "Sabit haritaya karşı tur süresi iyileşmesi.", clippingControl: "Clipping kontrolü", energyUse: "Deploy yoğunluğu", decisionMode: "Karar modu", dominantCommand: "Tur örneklerinin baskın komutu.", sideLap: "Tur süresi kazancı", sideClipping: "Orchestrator clipping", sideRisk: "Potansiyel clipping riski", thermalHeadroom: "Termal pay", thermalHeadroomCopy: "Yumuşak limite göre kalan batarya sıcaklık alanı.", controlScore: "Kontrol skoru", controlScoreCopy: "Clipping ve termal limit sürelerinden türetilen karar kalitesi.", lookahead: "Lookahead", lookaheadCopy: "Yaklaşan uzun düzlükler için enerji rezerv ufku.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performansı, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.", scenarioName: "Senaryo", scenarioAmbient: "Ortam", scenarioLapGain: "Tur kazancı", scenarioClipping: "Clipping azalması", scenarioThermal: "Termal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Durum", tableStrategy: "Strateji", tableLapProxy: "Tur proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping zaman etkisi (proxy s)", tableThermal: "Termal limit (s)", tableSpeedLoss: "Maksimum hız kaybı", tableEndSoc: "Final SoC", tableUnused: "Kalan enerji", tableMaxTemp: "Maks. batarya sıcaklığı", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy yoğunluğu %", tableScore: "Kontrol skoru", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Mesafe", durationHeader: "Süre", avgSpeedHeader: "Ort. hız" }});
+    Object.assign(dictionary.en, {{ lapImprovement: "Lap time improvement", vsFixed: "Compared with fixed map", clippingReduction: "Clipping reduction", orchestratorStrategy: "Orchestrator strategy", regenEvents: "Regen events", regenPoints: "Regen decision points", previous: "Previous", next: "Next", orchestrationGain: "Orchestration gain", lapGainCopy: "Lap time improvement versus the fixed map.", clippingControl: "Clipping control", energyUse: "Deploy intensity", decisionMode: "Decision mode", dominantCommand: "Dominant command across lap samples.", sideLap: "Lap time gain", sideClipping: "Orchestrator clipping", sideRisk: "Potential clipping risk", thermalHeadroom: "Thermal headroom", thermalHeadroomCopy: "Battery temperature margin to the soft limit.", controlScore: "Control score", controlScoreCopy: "Decision quality derived from clipping and thermal-limit time.", lookahead: "Lookahead", lookaheadCopy: "Energy reserve horizon for upcoming long straights.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performance compared across starting and thermal conditions on the same track model.", scenarioName: "Scenario", scenarioAmbient: "Ambient", scenarioLapGain: "Lap gain", scenarioClipping: "Clipping reduction", scenarioThermal: "Thermal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Status", tableStrategy: "Strategy", tableLapProxy: "Lap proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping time effect (proxy s)", tableThermal: "Thermal limit (s)", tableSpeedLoss: "Maximum speed loss", tableEndSoc: "Final SoC", tableUnused: "Unused energy", tableMaxTemp: "Max battery temperature", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy intensity %", tableScore: "Control score", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Distance", durationHeader: "Duration", avgSpeedHeader: "Avg. speed" }});
     const setLanguage = language => {{
       document.documentElement.lang = language === 'en' ? 'en' : 'tr';
+      window.reoLanguage = language === 'en' ? 'en' : 'tr';
       localStorage.setItem('reo-language', language);
       document.querySelectorAll('[data-i18n]').forEach(node => {{ node.textContent = dictionary[language][node.dataset.i18n] || node.textContent; }});
       document.querySelectorAll('[data-i18n-tr]').forEach(node => {{ node.textContent = language === 'en' ? node.dataset.i18nEn : node.dataset.i18nTr; }});
@@ -828,17 +943,17 @@ def _build_strategy_figure(
         shared_xaxes=True,
         vertical_spacing=0.04,
         subplot_titles=(
-            "Hiz ve aktif aero",
+            "Hız ve aktif aero",
             "Deploy / recharge",
             "Energy Store SoC",
-            "Clipping riski",
+            "Potansiyel clipping riski",
             "Batarya sıcaklığı",
         ),
     )
 
     x = predictive_trace["distance_m"]
     aero_numeric = predictive_trace["aero_mode"].map({"Z_MODE": 0, "X_MODE": 1})
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Hiz km/h", line=dict(color="#245f9f", width=2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Hız km/h", line=dict(color="#245f9f", width=2)), row=1, col=1)
     fig.add_trace(go.Scatter(x=x, y=aero_numeric * 100, name="X_MODE x100", line=dict(color="#14171c", dash="dot")), row=1, col=1)
 
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Sabit deploy", line=dict(color="#bf7a00")), row=2, col=1)
@@ -885,6 +1000,13 @@ def _build_strategy_figure(
     return fig
 
 
+def _event_options(selected_event: str) -> str:
+    return "".join(
+        f'<option value="{escape(event)}"{" selected" if event == selected_event else ""}{" disabled" if not event_data_available(event) else ""}>{escape(label if event_data_available(event) else f"{label} · Veri bekleniyor")}</option>'
+        for event, label in F1_2026_EVENTS
+    )
+
+
 def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
     fixed = _metric(metrics, "fixed_map")
     predictive = _metric(metrics, "predictive_mpc")
@@ -892,15 +1014,15 @@ def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd
     risk_peak = predictive_trace["clipping_risk"].max()
     return f"""
       <div class="side-block">
-        <span class="side-label">Tur süresi kazancı</span>
+        <span class="side-label" data-i18n="sideLap">Tur süresi kazancı</span>
         <span class="side-value" id="reo-side-lap">{lap_delta:.3f} s</span>
       </div>
       <div class="side-block">
-        <span class="side-label">Orchestrator clipping</span>
+        <span class="side-label" data-i18n="sideClipping">Orchestrator clipping</span>
         <span class="side-value" id="reo-side-clipping">{predictive["clipping_duration_s"]:.3f} s</span>
       </div>
       <div class="side-block">
-        <span class="side-label">Peak risk</span>
+        <span class="side-label" data-i18n="sideRisk">Potansiyel clipping riski</span>
         <span class="side-value" id="reo-side-risk">{risk_peak:.2f}</span>
       </div>
 """
@@ -925,13 +1047,13 @@ def _scenario_comparison_panel(comparison: pd.DataFrame | None) -> str:
             "</tr>"
         )
     return f"""
-      <div class="panel">
+      <div class="panel data-dependent">
         <h2 data-i18n="scenarioTitle">Senaryo doğrulaması</h2>
-        <p>Orchestrator performansi, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.</p>
+        <p data-i18n="scenarioDescription">Orchestrator performansı, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.</p>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Senaryo</th><th>Ortam</th><th>Lap kazancı</th><th>Clipping azalımı</th><th>Termal limit</th><th>Final SoC</th><th>Durum</th></tr></thead>
-            <tbody>{''.join(rows)}</tbody>
+            <thead><tr><th data-i18n="scenarioName">Senaryo</th><th data-i18n="scenarioAmbient">Ortam</th><th data-i18n="scenarioLapGain">Tur kazancı</th><th data-i18n="scenarioClipping">Clipping azalması</th><th data-i18n="scenarioThermal">Termal limit</th><th data-i18n="scenarioFinalSoc">Final SoC</th><th data-i18n="scenarioStatus">Durum</th></tr></thead>
+            <tbody id="reo-scenario-body">{''.join(rows)}</tbody>
           </table>
         </div>
       </div>
@@ -951,7 +1073,7 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
     payload = json.dumps(feed.to_dict(orient="records"), ensure_ascii=True, allow_nan=False)
     source_label = "SYNTHETIC REPLAY" if source.lower() == "synthetic" else escape(source.upper())
     return f"""
-      <section class="live-console" aria-live="polite">
+      <section class="live-console data-dependent" aria-live="polite">
         <div class="live-console-head">
           <div><h2 id="reo-live-title">Canlı karar konsolu</h2><p id="reo-live-subtitle">Yarış mühendisi için anlık enerji önerisi</p></div>
           <span class="live-badge" id="reo-live-source">{source_label}</span>
@@ -963,18 +1085,18 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
             <p id="reo-live-reason"></p>
           </div>
           <div class="live-kpis">
-            <div class="live-kpi"><span id="reo-live-soc-label">Energy Store</span><b id="reo-live-soc">-</b></div>
+            <div class="live-kpi"><span id="reo-live-soc-label">Enerji deposu</span><b id="reo-live-soc">-</b></div>
             <div class="live-kpi"><span id="reo-live-temp-label">Batarya</span><b id="reo-live-temp">-</b></div>
-            <div class="live-kpi"><span id="reo-live-risk-label">Clipping riski</span><b id="reo-live-risk">-</b></div>
+            <div class="live-kpi"><span id="reo-live-risk-label">Potansiyel clipping riski</span><b id="reo-live-risk">-</b></div>
             <div class="live-kpi"><span id="reo-live-next-label">Sonraki düzlük</span><b id="reo-live-next">-</b></div>
           </div>
         </div>
         <div class="live-stream" aria-label="Live telemetry">
-          <div class="live-stream-item"><span>Speed</span><b id="reo-live-speed">-</b></div>
-          <div class="live-stream-item"><span>Deploy</span><b id="reo-live-deploy">-</b></div>
-          <div class="live-stream-item"><span>Regen</span><b id="reo-live-regen">-</b></div>
-          <div class="live-stream-item"><span>Aero</span><b id="reo-live-aero">-</b></div>
-          <div class="live-stream-item"><span>Segment</span><b id="reo-live-segment">-</b></div>
+          <div class="live-stream-item"><span id="reo-live-speed-label">Hız</span><b id="reo-live-speed">-</b></div>
+          <div class="live-stream-item"><span id="reo-live-deploy-label">Deploy</span><b id="reo-live-deploy">-</b></div>
+          <div class="live-stream-item"><span id="reo-live-regen-label">Regen</span><b id="reo-live-regen">-</b></div>
+          <div class="live-stream-item"><span id="reo-live-aero-label">Aero</span><b id="reo-live-aero">-</b></div>
+          <div class="live-stream-item"><span id="reo-live-segment-label">Segment</span><b id="reo-live-segment">-</b></div>
         </div>
         <div class="live-console-meta"><span class="live-time" id="reo-live-context"></span><span class="live-time" id="reo-live-confidence"></span></div>
         <div class="live-controls">
@@ -990,8 +1112,8 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
           window.reoLapDistanceM = feed.length ? Number(feed[feed.length - 1].distance_m) : 1;
           const selectedQuery = window.reoSelectionQuery ? `&${{window.reoSelectionQuery}}` : '';
           const labels = {{
-            tr: {{ title: 'Canlı karar konsolu', subtitle: 'Yarış mühendisi için anlık enerji önerisi', soc: 'Energy Store', temp: 'Batarya', risk: 'Clipping riski', next: 'Sonraki düzlük', confidence: 'Güven', context: 'Tur içi konum' }},
-            en: {{ title: 'Live decision console', subtitle: 'Real-time energy recommendation for the race engineer', soc: 'Energy Store', temp: 'Battery', risk: 'Clipping risk', next: 'Next straight', confidence: 'Confidence', context: 'Lap position' }}
+            tr: {{ title: 'Canlı karar konsolu', subtitle: 'Yarış mühendisi için anlık enerji önerisi', soc: 'Enerji deposu', temp: 'Batarya', risk: 'Potansiyel clipping riski', next: 'Sonraki düzlük', speed: 'Hız', deploy: 'Deploy', regen: 'Regen', aero: 'Aero', segment: 'Segment', confidence: 'Güven', context: 'Tur içi konum' }},
+            en: {{ title: 'Live decision console', subtitle: 'Real-time energy recommendation for the race engineer', soc: 'Energy store', temp: 'Battery', risk: 'Potential clipping risk', next: 'Next straight', speed: 'Speed', deploy: 'Deploy', regen: 'Regen', aero: 'Aero', segment: 'Segment', confidence: 'Confidence', context: 'Lap position' }}
           }};
           let index = 0;
           let timer = null;
@@ -1006,6 +1128,11 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
             document.getElementById('reo-live-temp-label').textContent = copy.temp;
             document.getElementById('reo-live-risk-label').textContent = copy.risk;
             document.getElementById('reo-live-next-label').textContent = copy.next;
+            document.getElementById('reo-live-speed-label').textContent = copy.speed;
+            document.getElementById('reo-live-deploy-label').textContent = copy.deploy;
+            document.getElementById('reo-live-regen-label').textContent = copy.regen;
+            document.getElementById('reo-live-aero-label').textContent = copy.aero;
+            document.getElementById('reo-live-segment-label').textContent = copy.segment;
           }};
           const renderRow = row => {{
             if (!row) return;
@@ -1034,7 +1161,7 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
           const render = () => renderRow(feed[index]);
           const syncApi = async () => {{
             try {{
-              const response = await fetch(`http://localhost:8001/api/decision?index=${{index}}${{selectedQuery}}`, {{ cache: 'no-store' }});
+              const response = await fetch(`${{window.reoApiBase}}/api/decision?index=${{index}}${{selectedQuery}}`, {{ cache: 'no-store' }});
               if (!response.ok) throw new Error('API unavailable');
               const payload = await response.json();
               seek.max = String(Math.max(Number(payload.total) - 1, 0));
@@ -1123,6 +1250,7 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
       <script>
         (() => {{
           let allRows = {payload};
+          window.reoApiBase = document.documentElement.dataset.apiBase || new URLSearchParams(window.location.search).get('api_base') || '';
           const pageSize = 18;
           let page = 0;
           const strategy = document.getElementById('reo-strategy-filter');
@@ -1163,7 +1291,7 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
           render();
           window.reoExplorerReload = async selectedQuery => {{
             try {{
-              const response = await fetch(`http://localhost:8001/api/explorer?${{selectedQuery}}`, {{ cache: 'no-store' }});
+              const response = await fetch(`${{window.reoApiBase}}/api/explorer?${{selectedQuery}}`, {{ cache: 'no-store' }});
               if (!response.ok) throw new Error('Explorer API unavailable');
               const data = await response.json();
               allRows = data.rows || [];
@@ -1178,18 +1306,22 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
 """
 
 
-def _kpi_cards(metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
+def _kpi_cards(metrics: pd.DataFrame, predictive_trace: pd.DataFrame, config: EnergyConfig) -> str:
     fixed = _metric(metrics, "fixed_map")
     predictive = _metric(metrics, "predictive_mpc")
     lap_delta = fixed["lap_time_proxy_s"] - predictive["lap_time_proxy_s"]
     clipping_delta = fixed["clipping_duration_s"] - predictive["clipping_duration_s"]
-    soc_pct = predictive["end_soc_mj"] / 4.0 * 100.0
-    attack_count = int(predictive_trace["driver_command"].isin(["DEPLOY ATTACK", "OVERTAKE READY"]).sum())
+    soc_pct = (
+        (predictive["end_soc_mj"] - config.minimum_soc_mj)
+        / max(config.usable_energy_mj - config.minimum_soc_mj, 1e-6)
+        * 100.0
+    )
+    regen_count = int((predictive_trace["driver_command"] == "REGEN PRIORITY").sum())
     return f"""
           <div class="metric"><span data-i18n="lapImprovement">Tur süresi iyileşmesi</span><b id="reo-kpi-lap">{lap_delta:.3f}s</b><small data-i18n="vsFixed">Sabit haritaya göre</small></div>
-          <div class="metric"><span data-i18n="clippingReduction">Clipping azalımı</span><b id="reo-kpi-clipping">{clipping_delta:.1f}s</b><small data-i18n="orchestratorStrategy">Orchestrator stratejisi</small></div>
+          <div class="metric"><span data-i18n="clippingReduction">Clipping azalması</span><b id="reo-kpi-clipping">{clipping_delta:.1f}s</b><small data-i18n="orchestratorStrategy">Orchestrator stratejisi</small></div>
           <div class="metric"><span>Final SoC</span><b id="reo-kpi-soc">{soc_pct:.1f}%</b><small id="reo-kpi-soc-detail">{predictive["end_soc_mj"]:.3f} MJ</small></div>
-          <div class="metric"><span data-i18n="attackReadiness">Atak hazırlığı</span><b id="reo-kpi-attack">{attack_count}</b><small data-i18n="deployPoints">Deploy komut noktası</small></div>
+          <div class="metric"><span data-i18n="regenEvents">Regen olayları</span><b id="reo-kpi-regen">{regen_count}</b><small data-i18n="regenPoints">Regen karar noktası</small></div>
 """
 
 
@@ -1204,7 +1336,7 @@ def _orchestrator_insights(metrics: pd.DataFrame, predictive_trace: pd.DataFrame
     top_command_share = float(command_counts.iloc[0] / max(len(predictive_trace), 1) * 100.0) if not command_counts.empty else 0.0
     risk_state = "Kontrol altında" if predictive["clipping_duration_s"] <= 0.05 else "Risk izlenmeli"
     return f"""
-      <div class="insight-grid">
+      <div class="insight-grid" id="reo-insights">
         <div class="insight">
           <span data-i18n="orchestrationGain">Orkestrasyon kazancı</span>
           <b>{lap_delta:.3f}s</b>
@@ -1216,8 +1348,8 @@ def _orchestrator_insights(metrics: pd.DataFrame, predictive_trace: pd.DataFrame
           <p data-i18n-tr="{clipping_delta:.2f}s clipping süresi azaltıldı." data-i18n-en="{clipping_delta:.2f}s of clipping time reduced.">{clipping_delta:.2f}s clipping süresi azaltıldı.</p>
         </div>
         <div class="insight">
-          <span data-i18n="energyUse">Enerji kullanımı</span>
-          <b>{predictive["energy_utilization_pct"]:.1f}%</b>
+          <span data-i18n="energyUse">Deploy yoğunluğu</span>
+          <b>{predictive["deploy_intensity_pct"]:.1f}%</b>
           <p>{predictive["total_deploy_mj"]:.2f} MJ deploy, {predictive["total_regen_mj"]:.2f} MJ regen.</p>
         </div>
         <div class="insight">
@@ -1226,24 +1358,24 @@ def _orchestrator_insights(metrics: pd.DataFrame, predictive_trace: pd.DataFrame
           <p data-i18n="dominantCommand">Tur örneklerinin {top_command_share:.1f}% bölümünde baskın komut.</p>
         </div>
         <div class="insight">
-          <span>Termal pay</span>
+          <span data-i18n="thermalHeadroom">Termal pay</span>
           <b>{thermal_headroom:.1f}C</b>
-          <p>Yumuşak limite göre kalan batarya sıcaklık alanı.</p>
+          <p data-i18n="thermalHeadroomCopy">Yumuşak limite göre kalan batarya sıcaklık alanı.</p>
         </div>
         <div class="insight">
-          <span>Kontrol skoru</span>
+          <span data-i18n="controlScore">Kontrol skoru</span>
           <b>{predictive["clipping_control_score"]:.1f}</b>
-          <p>Clipping ve termal limit sürelerinden türetilen karar kalitesi.</p>
+          <p data-i18n="controlScoreCopy">Clipping ve termal limit sürelerinden türetilen karar kalitesi.</p>
         </div>
         <div class="insight">
-          <span>Lookahead</span>
+          <span data-i18n="lookahead">Lookahead</span>
           <b>{config.horizon_s:.0f}s</b>
-          <p>Yaklaşan uzun düzlükler için enerji rezerv ufku.</p>
+          <p data-i18n="lookaheadCopy">Yaklaşan uzun düzlükler için enerji rezerv ufku.</p>
         </div>
         <div class="insight">
-          <span>Final SoC</span>
+          <span data-i18n="finalSoc">Final SoC</span>
           <b>{predictive["end_soc_mj"]:.2f} MJ</b>
-          <p>Hedef finish rezervi {config.target_finish_soc_mj:.2f} MJ.</p>
+          <p data-i18n-tr="Hedef finish rezervi {config.target_finish_soc_mj:.2f} MJ." data-i18n-en="Target finish reserve: {config.target_finish_soc_mj:.2f} MJ.">Hedef finish rezervi {config.target_finish_soc_mj:.2f} MJ.</p>
         </div>
       </div>
 """
@@ -1296,7 +1428,7 @@ def _command_timeline(trace: pd.DataFrame) -> str:
             </div>
 """
         )
-    return f'<div class="command-list">{"".join(cards)}</div>'
+    return f'<div class="command-list" id="reo-command-timeline">{"".join(cards)}</div>'
 
 
 def _format_metrics(metrics: pd.DataFrame) -> str:
@@ -1304,6 +1436,7 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
         "strategy",
         "lap_time_proxy_s",
         "clipping_duration_s",
+        "clipping_loss_proxy_s",
         "thermal_limited_duration_s",
         "max_speed_loss_kmh",
         "end_soc_mj",
@@ -1311,13 +1444,14 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
         "max_battery_temp_c",
         "total_deploy_mj",
         "total_regen_mj",
-        "energy_utilization_pct",
+        "deploy_intensity_pct",
         "clipping_control_score",
     ]
     labels = {
         "strategy": "Strateji",
         "lap_time_proxy_s": "Lap proxy (s)",
         "clipping_duration_s": "Clipping (s)",
+        "clipping_loss_proxy_s": "Clipping zaman etkisi (proxy s)",
         "thermal_limited_duration_s": "Termal limit (s)",
         "max_speed_loss_kmh": "Maksimum hız kaybı",
         "end_soc_mj": "Final SoC",
@@ -1325,8 +1459,14 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
         "max_battery_temp_c": "Max batarya C",
         "total_deploy_mj": "Deploy MJ",
         "total_regen_mj": "Regen MJ",
-        "energy_utilization_pct": "Enerji kull. %",
+        "deploy_intensity_pct": "Deploy yoğunluğu %",
         "clipping_control_score": "Kontrol skoru",
+    }
+    i18n_keys = {
+        "strategy": "tableStrategy", "lap_time_proxy_s": "tableLapProxy", "clipping_duration_s": "tableClipping",
+        "clipping_loss_proxy_s": "tableClippingLoss", "thermal_limited_duration_s": "tableThermal", "max_speed_loss_kmh": "tableSpeedLoss",
+        "end_soc_mj": "tableEndSoc", "unused_energy_mj": "tableUnused", "max_battery_temp_c": "tableMaxTemp", "total_deploy_mj": "tableDeploy",
+        "total_regen_mj": "tableRegen", "deploy_intensity_pct": "tableIntensity", "clipping_control_score": "tableScore",
     }
     table = metrics[columns].copy()
     table["strategy"] = table["strategy"].replace(
@@ -1335,7 +1475,12 @@ def _format_metrics(metrics: pd.DataFrame) -> str:
     numeric_cols = table.select_dtypes("number").columns
     table[numeric_cols] = table[numeric_cols].round(3)
     table = table.rename(columns=labels)
-    return table.to_html(index=False, escape=True)
+    headers = "".join(f"<th data-i18n=\"{i18n_keys.get(column, '')}\">{escape(str(labels[column]))}</th>" for column in columns)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{escape(str(value))}</td>" for value in row) + "</tr>"
+        for row in table.itertuples(index=False, name=None)
+    )
+    return f'<div class="table-scroll"><table id="reo-metrics-table"><thead><tr>{headers}</tr></thead><tbody id="reo-metrics-body">{body}</tbody></table></div>'
 
 
 def _segment_summary(frame: pd.DataFrame) -> str:
@@ -1352,11 +1497,17 @@ def _segment_summary(frame: pd.DataFrame) -> str:
             "segment_type": "Segment",
             "aero_mode": "Aero",
             "distance_m": "Mesafe",
-            "duration_s": "Sure",
-            "mean_speed_kmh": "Ort hiz",
+            "duration_s": "Süre",
+            "mean_speed_kmh": "Ort. hız",
         }
     )
-    return grouped.to_html(index=False, escape=True)
+    header_keys = {"Segment": "segmentHeader", "Aero": "aeroHeader", "Mesafe": "distanceHeader", "Süre": "durationHeader", "Ort. hız": "avgSpeedHeader"}
+    headers = "".join(f"<th data-i18n=\"{header_keys.get(column, '')}\">{escape(str(column))}</th>" for column in grouped.columns)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{escape(str(value))}</td>" for value in row) + "</tr>"
+        for row in grouped.itertuples(index=False, name=None)
+    )
+    return f'<div class="table-scroll"><table id="reo-segment-table"><thead><tr>{headers}</tr></thead><tbody id="reo-segment-body">{body}</tbody></table></div>'
 
 
 def _metric(metrics: pd.DataFrame, strategy: str) -> pd.Series:

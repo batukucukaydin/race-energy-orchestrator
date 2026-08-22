@@ -3,15 +3,16 @@ from __future__ import annotations
 from functools import lru_cache
 
 import pandas as pd
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .config import EnergyConfig
-from .data import load_lap_data
+from .config import EnergyConfig, F1_2026_EVENTS, F1_2026_RACE_END_DATES, SUPPORTED_YEAR, event_data_available
+from .data import FastF1DataUnavailable, load_lap_data
 from .live import build_live_decision_feed
 from .metrics import metrics_frame
 from .model import simulate_strategy
+from .scenarios import compare_scenarios
 from .segmentation import add_track_features
 
 
@@ -33,7 +34,12 @@ class SessionResponse(BaseModel):
     sample_count: int
     lap_duration_s: float
     ambient_temp_c: float
+    battery_soft_limit_c: float
+    horizon_s: float
     initial_soc_mj: float
+    minimum_soc_mj: float
+    usable_energy_mj: float
+    target_finish_soc_mj: float
 
 
 class DecisionResponse(BaseModel):
@@ -56,10 +62,13 @@ class ExplorerResponse(BaseModel):
 
 
 TRACK_OPTIONS = [
-    {"event": "Monza", "label": "Monza"},
-    {"event": "Spa-Francorchamps", "label": "Spa-Francorchamps"},
-    {"event": "Silverstone", "label": "Silverstone"},
-    {"event": "Suzuka", "label": "Suzuka"},
+    {
+        "event": event,
+        "label": label,
+        "race_end_date": F1_2026_RACE_END_DATES[event].isoformat(),
+        "data_available": event_data_available(event),
+    }
+    for event, label in F1_2026_EVENTS
 ]
 
 
@@ -79,13 +88,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> HealthResponse:
-        session = _session()
+        session = _session(event="Suzuka")
         return HealthResponse(status="ok", service="race-energy-orchestrator", data_source=session["lap_data"].source)
 
     @app.get("/api/session", response_model=SessionResponse)
     def session_summary(
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> SessionResponse:
@@ -109,13 +118,18 @@ def create_app() -> FastAPI:
             sample_count=len(frame),
             lap_duration_s=float(frame["time_s"].iloc[-1]),
             ambient_temp_c=config.ambient_temp_c,
+            battery_soft_limit_c=config.battery_soft_limit_c,
+            horizon_s=config.horizon_s,
             initial_soc_mj=config.initial_soc_mj,
+            minimum_soc_mj=config.minimum_soc_mj,
+            usable_energy_mj=config.usable_energy_mj,
+            target_finish_soc_mj=config.target_finish_soc_mj,
         )
 
     @app.get("/api/metrics", response_model=MetricsResponse)
     def metrics(
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> MetricsResponse:
@@ -125,13 +139,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/options")
     def options() -> dict[str, object]:
-        return {"years": [2024, 2025, 2026], "events": TRACK_OPTIONS, "sessions": ["Q", "R", "FP1", "FP2", "FP3"]}
+        return {"years": [SUPPORTED_YEAR], "events": TRACK_OPTIONS, "sessions": ["Q", "R", "FP1", "FP2", "FP3"]}
 
     @app.get("/api/decision", response_model=DecisionResponse)
     def decision(
         index: int = Query(default=0, ge=0),
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> DecisionResponse:
@@ -143,8 +157,8 @@ def create_app() -> FastAPI:
     def decisions(
         start: int = Query(default=0, ge=0),
         limit: int = Query(default=100, ge=1, le=500),
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> list[DecisionResponse]:
@@ -157,8 +171,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/trace", response_model=TraceResponse)
     def trace(
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> TraceResponse:
@@ -170,8 +184,8 @@ def create_app() -> FastAPI:
 
     @app.get("/api/explorer", response_model=ExplorerResponse)
     def explorer(
-        year: int = Query(default=2024, ge=2020, le=2030),
-        event: str = Query(default="Monza", min_length=2, max_length=80),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
         session_name: str = Query(default="Q", min_length=1, max_length=20),
         driver: str = Query(default="LEC", min_length=2, max_length=4),
     ) -> ExplorerResponse:
@@ -181,20 +195,41 @@ def create_app() -> FastAPI:
             rows.extend(_explorer_record(row, strategy) for _, row in session[key].iterrows())
         return ExplorerResponse(rows=rows)
 
+    @app.get("/api/scenarios")
+    def scenarios(
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
+        session_name: str = Query(default="Q", min_length=1, max_length=20),
+        driver: str = Query(default="LEC", min_length=2, max_length=4),
+    ) -> list[dict[str, object]]:
+        session = _session(year, event, session_name, driver)
+        comparison = compare_scenarios(session["lap_data"].frame, session["config"])
+        return comparison.to_dict(orient="records")
+
     return app
 
 
 @lru_cache(maxsize=16)
-def _session(year: int = 2024, event: str = "Monza", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
+def _session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
+    if year == SUPPORTED_YEAR and event in F1_2026_RACE_END_DATES and not event_data_available(event):
+        race_end = F1_2026_RACE_END_DATES[event].isoformat()
+        raise HTTPException(
+            status_code=409,
+            detail=f"{event} yarışı henüz tamamlanmadı ({race_end}); gerçek telemetry verisi henüz mevcut değil.",
+        )
     config = EnergyConfig()
-    lap_data = load_lap_data(
-        year=year,
-        event=event,
-        session_name=session_name,
-        driver=driver,
-        cache_dir="work/fastf1-cache",
-        synthetic_only=True,
-    )
+    try:
+        lap_data = load_lap_data(
+            year=year,
+            event=event,
+            session_name=session_name,
+            driver=driver,
+            cache_dir="work/fastf1-cache",
+            synthetic_only=False,
+            allow_synthetic_fallback=False,
+        )
+    except FastF1DataUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     featured = add_track_features(lap_data.frame, config)
     fixed = simulate_strategy(featured, config, "fixed_map")
     predictive = simulate_strategy(featured, config, "predictive_mpc")
@@ -211,7 +246,11 @@ def _session(year: int = 2024, event: str = "Monza", session_name: str = "Q", dr
         "event": event,
         "session_name": session_name,
         "driver": driver,
-        "circuit_label": f"{event}-like synthetic proxy",
+        "circuit_label": (
+            f"{event} telemetry"
+            if lap_data.source != "Synthetic"
+            else f"{event}-like synthetic proxy"
+        ),
     }
 
 
@@ -238,10 +277,12 @@ def _record(row: pd.Series) -> dict[str, float | str]:
 
 def _trace_record(row: pd.Series) -> dict[str, float | str]:
     return {
+        "time_s": float(row["time_s"]),
         "distance_m": float(row["distance_m"]),
         "segment_type": str(row["segment_type"]),
         "speed_kmh": float(row["speed_kmh"]),
         "aero_mode": str(row["aero_mode"]),
+        "driver_command": str(row["driver_command"]),
         "deploy_kw": float(row["deploy_kw"]),
         "regen_kw": float(row["regen_kw"]),
         "soc_mj": float(row["soc_mj"]),

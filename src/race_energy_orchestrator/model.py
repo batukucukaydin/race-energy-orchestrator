@@ -48,8 +48,11 @@ def simulate_strategy(frame: pd.DataFrame, config: EnergyConfig, strategy: str) 
         soc = float(np.clip(soc, config.minimum_soc_mj, config.usable_energy_mj))
 
         temp_c = _update_battery_temp(temp_c, actual_deploy_kw, actual_regen_kw, dt, config)
-        clipping = requested_deploy_kw - actual_deploy_kw > config.clipping_threshold_kw
         thermal_limited = requested_deploy_kw > deploy_cap_kw + config.clipping_threshold_kw
+        clipping = (
+            requested_deploy_kw - actual_deploy_kw > config.clipping_threshold_kw
+            and not thermal_limited
+        )
 
         rows.append(
             {
@@ -69,7 +72,7 @@ def simulate_strategy(frame: pd.DataFrame, config: EnergyConfig, strategy: str) 
     sim["clipping_risk"] = [
         predict_clipping_risk(sim, idx, float(sim.at[idx, "soc_mj"]), config) for idx in range(len(sim))
     ]
-    sim["driver_command"] = sim.apply(driver_command, axis=1)
+    sim["driver_command"] = sim.apply(lambda row: driver_command(row, config), axis=1)
     sim["speed_loss_kmh"] = np.where(
         sim["clipping"],
         (sim["requested_deploy_kw"] - sim["deploy_kw"]).clip(lower=0.0) / config.mgu_k_deploy_limit_kw * 12.0,

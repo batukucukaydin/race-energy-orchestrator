@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import EnergyConfig
+from .config import EnergyConfig, SUPPORTED_YEAR
 from .data import load_lap_data
 from .metrics import metrics_frame
 from .model import simulate_strategy
@@ -21,14 +21,15 @@ def build_parser() -> argparse.ArgumentParser:
         prog="race-energy-orchestrator",
         description="Generate a predictive hybrid race energy management and clipping report.",
     )
-    parser.add_argument("--year", type=int, default=2024)
-    parser.add_argument("--event", default="Monza")
+    parser.add_argument("--year", type=int, default=SUPPORTED_YEAR, choices=[SUPPORTED_YEAR], help="Only the 2026 season is supported.")
+    parser.add_argument("--event", default="Suzuka")
     parser.add_argument("--session", default="Q")
     parser.add_argument("--driver", default="LEC")
     parser.add_argument("--output", default="outputs/report.html")
     parser.add_argument("--metrics-output", default=None)
     parser.add_argument("--trace-output", default=None)
     parser.add_argument("--cache-dir", default="work/fastf1-cache")
+    parser.add_argument("--api-base", default="http://localhost:8001", help="API base URL embedded in the dashboard.")
     parser.add_argument("--synthetic-only", action="store_true", help="Skip FastF1 and use deterministic demo data.")
     parser.add_argument("--ambient-temp-c", type=float, default=None, help="Override ambient temperature for scenario runs.")
     parser.add_argument("--initial-soc-mj", type=float, default=None, help="Override starting Energy Store state in MJ.")
@@ -99,8 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         event=args.event,
         session_name=args.session,
         driver=args.driver,
+        api_base=args.api_base,
     )
-    render_support_pages(output_path.parent, lap_data, fixed, predictive, config)
+    render_support_pages(output_path.parent, lap_data, fixed, predictive, config, api_base=args.api_base)
 
     print(f"Report: {output_path}")
     if metrics_output is not None:

@@ -9,7 +9,7 @@ The project is intentionally team-neutral and vehicle-neutral. Its default confi
 From this folder:
 
 ```bash
-python -m race_energy_orchestrator --year 2024 --event Monza --session Q --driver LEC --output outputs/report.html
+python -m race_energy_orchestrator --year 2026 --event Monza --session Q --driver LEC --output outputs/report.html
 ```
 
 Offline deterministic demo:
@@ -26,7 +26,7 @@ python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.h
 
 All telemetry, strategy decisions, filters, charts, and scenario analysis are embedded in the self-contained HTML dashboard. CSV files are not written unless an explicit output path is provided.
 
-The dashboard begins with a synthetic live-decision replay for the race engineer. It shows the current energy recommendation, severity, reason, confidence, SoC, battery temperature, clipping risk, and time to the next high-value straight. Use the replay controls to inspect the decision stream across the lap.
+The dashboard begins with a synthetic live-decision replay for the race engineer. It uses one operator command vocabulary (`THERMAL PROTECT`, `REGEN PRIORITY`, `ENERGY HOLD`, `DEPLOY NOW`) and separates realized clipping duration from potential future clipping risk. Deploy intensity is normalized against the MGU-K power-time envelope; it is not cumulative deploy energy divided by a single-lap battery capacity.
 
 Scenario run with hotter ambient conditions and a lower starting battery state:
 
@@ -45,7 +45,7 @@ This adds the comparison table to the dashboard. To additionally export CSV data
 Deploy-ready static output:
 
 ```bash
-python -m race_energy_orchestrator --synthetic-only --output docs/index.html
+python -m race_energy_orchestrator --synthetic-only --api-base http://localhost:8001 --output docs/index.html
 python -m http.server 8000 --directory docs
 ```
 
@@ -66,8 +66,9 @@ API endpoints:
 - `GET /api/trace`: selected fixed/predictive telemetry traces for the live chart
 - `GET /api/decision?index=0`: one operator decision
 - `GET /api/decisions?start=0&limit=100`: paginated decision stream
+- `GET /api/scenarios`: selected-track scenario comparison
 
-The web panel uses the API for session context, KPI values, and the live decision console. The Plotly chart is a generated session snapshot; if the API is offline, the dashboard marks the embedded replay fallback instead of presenting it as live data.
+The web panel uses FastF1-backed API data when available. If the API is offline or FastF1 has no telemetry, the dashboard keeps the embedded snapshot and labels it as an embedded fallback; it never presents that snapshot as live data. A future race returns `409` and hides analysis panels instead of fabricating telemetry.
 
 Outputs:
 

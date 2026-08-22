@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .config import REQUIRED_INPUT_COLUMNS
+from .config import SUPPORTED_YEAR
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,10 @@ class LapData:
     notes: tuple[str, ...] = ()
 
 
+class FastF1DataUnavailable(RuntimeError):
+    """Raised when real FastF1 telemetry cannot be loaded."""
+
+
 def load_lap_data(
     year: int,
     event: str,
@@ -25,6 +30,7 @@ def load_lap_data(
     driver: str,
     cache_dir: str | Path,
     synthetic_only: bool = False,
+    allow_synthetic_fallback: bool = True,
 ) -> LapData:
     if synthetic_only:
         return generate_synthetic_lap(
@@ -38,6 +44,10 @@ def load_lap_data(
     try:
         return _load_fastf1_lap(year, event, session_name, driver, cache_dir)
     except Exception as exc:  # FastF1/network availability is intentionally optional.
+        if not allow_synthetic_fallback:
+            raise FastF1DataUnavailable(
+                f"FastF1 telemetry unavailable for {year} {event} {session_name} {driver.upper()}: {exc}"
+            ) from exc
         note = f"FastF1 unavailable ({type(exc).__name__}: {exc}). Using deterministic synthetic fallback."
         return generate_synthetic_lap(note, track=event, year=year, session_name=session_name, driver=driver)
 
@@ -116,7 +126,7 @@ def _clean_required_frame(frame: pd.DataFrame) -> pd.DataFrame:
 def generate_synthetic_lap(
     note: str | None = None,
     track: str = "Monza",
-    year: int = 2024,
+    year: int = SUPPORTED_YEAR,
     session_name: str = "Q",
     driver: str = "LEC",
 ) -> LapData:
@@ -139,16 +149,36 @@ def generate_synthetic_lap(
         {"name": "Parabolica", "type": "fast_corner", "length": 445, "v0": 165, "v1": 255},
     ]
 
-    track_key = track.lower().replace("-", "")
+    track_key = track.lower().replace("-", "").replace(" ", "")
     track_length_scale, track_speed_scale = {
+        "melbourne": (0.99, 0.96),
+        "shanghai": (1.08, 0.98),
         "monza": (1.00, 1.00),
-        "spafrancorchamps": (0.96, 0.97),
-        "silverstone": (1.03, 1.01),
         "suzuka": (0.94, 0.96),
+        "sakhir": (0.96, 0.94),
+        "jeddah": (1.05, 1.02),
+        "miami": (1.01, 0.985),
+        "montreal": (0.93, 0.95),
+        "monaco": (0.70, 0.78),
+        "barcelonacatalunya": (1.00, 0.97),
+        "spielberg": (0.88, 0.98),
+        "silverstone": (1.03, 1.01),
+        "spafrancorchamps": (0.96, 0.97),
+        "budapest": (0.91, 0.94),
+        "zandvoort": (0.89, 0.91),
+        "madrid": (0.95, 0.96),
+        "baku": (1.05, 0.98),
+        "singapore": (0.92, 0.84),
+        "austin": (1.07, 0.97),
+        "mexicocity": (0.95, 0.98),
+        "sãopaulo": (1.00, 0.94),
+        "lasvegas": (1.05, 1.00),
+        "lusail": (1.02, 0.99),
+        "yasmarina": (1.00, 0.96),
     }.get(track_key, (1.00, 0.99))
     session_speed_scale = {"Q": 1.00, "R": 0.95, "FP1": 0.90, "FP2": 0.93, "FP3": 0.97}.get(session_name.upper(), 0.95)
     driver_speed_scale = {"LEC": 1.000, "VER": 1.006, "NOR": 0.997, "HAM": 0.992}.get(driver.upper(), 0.995)
-    year_speed_scale = 1.0 + max(-2, min(4, year - 2024)) * 0.002
+    year_speed_scale = 1.0 + max(-2, min(2, year - SUPPORTED_YEAR)) * 0.002
     speed_scale = track_speed_scale * session_speed_scale * driver_speed_scale * year_speed_scale
 
     rows: list[dict[str, float | int | str]] = []

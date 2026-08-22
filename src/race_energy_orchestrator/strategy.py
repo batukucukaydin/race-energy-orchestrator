@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -43,15 +42,16 @@ def predictive_mpc_request(
         return 0.0, regen_kw
 
     deploy_limit = config.mgu_k_deploy_limit_kw
-    if state.soc_mj <= config.minimum_soc_mj + 0.05:
+    finish_reserve_mj = max(config.minimum_soc_mj, config.target_finish_soc_mj)
+    if state.soc_mj <= finish_reserve_mj + 0.02:
         return 0.0, regen_kw
 
     reserve_mj = _reserve_requirement(frame, idx, state.soc_mj, config)
-    available_for_deploy_mj = max(0.0, state.soc_mj - config.minimum_soc_mj - reserve_mj)
+    available_for_deploy_mj = max(0.0, state.soc_mj - finish_reserve_mj - reserve_mj)
 
     if row["is_long_straight"]:
         remaining_time = max(float(row["remaining_straight_time_s"]), float(row["dt_s"]), 0.1)
-        usable_mj = max(0.0, state.soc_mj - config.minimum_soc_mj - 0.10)
+        usable_mj = max(0.0, state.soc_mj - finish_reserve_mj - 0.10)
         smooth_kw = usable_mj * config.deploy_efficiency / remaining_time * 1000.0
         return float(np.clip(smooth_kw, 0.0, deploy_limit)), regen_kw
 
@@ -76,24 +76,23 @@ def predict_clipping_risk(frame: pd.DataFrame, idx: int, soc_mj: float, config: 
     need_mj, regen_mj = _future_long_straight_need(frame, idx, config)
     if need_mj <= 0.0:
         return 0.03
-    available_mj = max(0.0, soc_mj - config.minimum_soc_mj) + regen_mj
-    shortfall = need_mj - available_mj
-    return float(1.0 / (1.0 + math.exp(-shortfall / config.risk_width_mj)))
+    finish_reserve_mj = max(config.minimum_soc_mj, config.target_finish_soc_mj)
+    available_mj = max(0.0, soc_mj - finish_reserve_mj) + regen_mj
+    shortfall = max(0.0, need_mj - available_mj)
+    # Report the fraction of the upcoming energy need that is uncovered. This
+    # remains interpretable and avoids a sigmoid that saturates near 1.0.
+    return float(np.clip(shortfall / max(need_mj, config.risk_width_mj), 0.0, 1.0))
 
 
-def driver_command(row: pd.Series) -> str:
-    if row["clipping_risk"] >= 0.76 and row["segment_type"] == "braking":
-        return "RECHARGE +1"
-    if row["clipping_risk"] >= 0.70 and row["aero_mode"] != "X_MODE":
+def driver_command(row: pd.Series, config: EnergyConfig) -> str:
+    if bool(row.get("thermal_limited", False)):
+        return "THERMAL PROTECT"
+    if row["regen_kw"] >= 220.0:
+        return "REGEN PRIORITY"
+    if bool(row.get("clipping", False)) or row["clipping_risk"] >= 0.82:
         return "ENERGY HOLD"
-    if row["deploy_kw"] >= 310.0 and row["is_high_value_straight"]:
-        return "DEPLOY ATTACK"
-    if row["deploy_kw"] >= 260.0 and row["aero_mode"] == "X_MODE":
-        return "OVERTAKE READY"
-    if row["regen_kw"] >= 260.0:
-        return "RECHARGE +1"
-    if row["deploy_kw"] <= 90.0 and row["clipping_risk"] >= 0.45:
-        return "SAVE ENERGY"
+    if row["deploy_kw"] >= config.operator_deploy_threshold_kw:
+        return "DEPLOY NOW"
     return "ENERGY HOLD"
 
 
@@ -127,7 +126,8 @@ def _reserve_requirement(frame: pd.DataFrame, idx: int, soc_mj: float, config: E
     duration_s = float(group["straight_group_duration_s"])
     straight_need_mj = duration_s * config.mgu_k_deploy_limit_kw / 1000.0 / config.deploy_efficiency
     reserve = min(config.usable_energy_mj * 0.72, straight_need_mj * 0.74)
-    return max(0.0, min(reserve, config.usable_energy_mj - config.minimum_soc_mj, soc_mj))
+    finish_reserve_mj = max(config.minimum_soc_mj, config.target_finish_soc_mj)
+    return max(0.0, min(reserve, config.usable_energy_mj - finish_reserve_mj, soc_mj))
 
 
 def _future_long_straight_need(frame: pd.DataFrame, idx: int, config: EnergyConfig) -> tuple[float, float]:

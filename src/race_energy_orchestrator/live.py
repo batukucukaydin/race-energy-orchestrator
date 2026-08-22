@@ -42,12 +42,19 @@ def _decision_for_row(row: pd.Series, config: EnergyConfig) -> tuple[str, str, s
             "Batarya termal limiti güç kullanımını kısıtlıyor. Deploy azalt ve soğutma payını koru.",
             "Battery thermal limits are constraining power. Reduce deploy and preserve cooling margin.",
         )
-    if bool(row["clipping"]) or row["clipping_risk"] >= 0.82:
+    if bool(row["clipping"]):
         return (
             "ENERGY HOLD",
             "warning",
-            "Yaklaşan yüksek değerli bölüm için enerji rezervi yetersiz. Şimdiki deploy'u koru.",
-            "Energy reserve is insufficient for the next high-value section. Hold current deploy.",
+            "Gerçekleşen clipping tespit edildi. Deploy'u koru ve bir sonraki enerji fırsatını bekle.",
+            "Actual clipping was detected. Hold deploy and wait for the next energy opportunity.",
+        )
+    if row["clipping_risk"] >= 0.82:
+        return (
+            "ENERGY HOLD",
+            "advisory",
+            "İlerideki enerji ihtiyacı için rezerv korunuyor. Bu, gerçekleşmiş clipping değil, öngörü sinyalidir.",
+            "Reserve is being protected for future energy demand. This is a forecast signal, not realized clipping.",
         )
     if row["regen_kw"] >= 220.0:
         return (
@@ -56,7 +63,7 @@ def _decision_for_row(row: pd.Series, config: EnergyConfig) -> tuple[str, str, s
             "Frenleme enerjisi kullanılabilir. Bir sonraki deploy fırsatı için geri kazanım yap.",
             "Braking energy is available. Recover energy for the next deploy opportunity.",
         )
-    if row["deploy_kw"] >= 240.0:
+    if row["deploy_kw"] >= config.operator_deploy_threshold_kw:
         return (
             "DEPLOY NOW",
             "normal",

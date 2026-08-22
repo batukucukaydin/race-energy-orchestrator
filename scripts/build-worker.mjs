@@ -9,9 +9,21 @@ const server = resolve(dist, "server");
 const files = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
+};
+
+const optionalFiles = {
   "/metrics.csv": { file: "metrics.csv", type: "text/csv; charset=utf-8" },
   "/strategy_trace.csv": { file: "strategy_trace.csv", type: "text/csv; charset=utf-8" },
 };
+
+for (const [route, meta] of Object.entries(optionalFiles)) {
+  try {
+    await readFile(resolve(root, "docs", meta.file));
+    files[route] = meta;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+}
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(server, { recursive: true });

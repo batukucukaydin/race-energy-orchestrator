@@ -5,11 +5,13 @@ import pandas as pd
 from race_energy_orchestrator.cli import main
 from race_energy_orchestrator.config import EnergyConfig
 from race_energy_orchestrator.data import generate_synthetic_lap
+from race_energy_orchestrator.data import FastF1DataUnavailable
 from race_energy_orchestrator.metrics import metrics_frame
 from race_energy_orchestrator.live import build_live_decision_feed
 from race_energy_orchestrator.model import simulate_strategy
 from race_energy_orchestrator.segmentation import add_track_features
 from race_energy_orchestrator.scenarios import compare_scenarios
+from race_energy_orchestrator import api
 from race_energy_orchestrator.api import app
 from fastapi.testclient import TestClient
 
@@ -39,6 +41,10 @@ def test_predictive_strategy_reduces_clipping_duration() -> None:
     predictive_clipping = predictive.loc[predictive["clipping"], "dt_s"].sum()
 
     assert predictive_clipping < fixed_clipping
+    assert float(predictive["soc_mj"].iloc[-1]) >= config.target_finish_soc_mj - 1e-6
+    assert set(predictive["driver_command"].unique()).issubset(
+        {"THERMAL PROTECT", "REGEN PRIORITY", "ENERGY HOLD", "DEPLOY NOW"}
+    )
 
 
 def test_thermal_limit_reduces_requested_deploy() -> None:
@@ -69,7 +75,13 @@ def test_metrics_are_deterministic() -> None:
     )
 
     pd.testing.assert_frame_equal(first, second)
-    assert {"thermal_limited_duration_s", "energy_utilization_pct", "clipping_control_score"}.issubset(first.columns)
+    assert {
+        "thermal_limited_duration_s",
+        "deploy_intensity_pct",
+        "clipping_loss_proxy_s",
+        "clipping_control_score",
+    }.issubset(first.columns)
+    assert (first["deploy_intensity_pct"] < 100.0).all()
 
 
 def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
@@ -138,9 +150,17 @@ def test_live_decision_feed_exposes_actionable_operator_fields() -> None:
     assert {"command", "severity", "reason_tr", "reason_en", "confidence_pct"}.issubset(feed.columns)
     assert (feed["confidence_pct"] >= 65.0).all()
     assert (feed["command"] == "THERMAL PROTECT").any()
+    assert set(feed["command"].unique()).issubset(
+        {"THERMAL PROTECT", "REGEN PRIORITY", "ENERGY HOLD", "DEPLOY NOW"}
+    )
 
 
-def test_fastapi_decision_contract() -> None:
+def test_fastapi_decision_contract(monkeypatch) -> None:
+    def synthetic_test_loader(year, event, session_name, driver, cache_dir, synthetic_only=False, allow_synthetic_fallback=True):
+        return generate_synthetic_lap(track=event, year=year, session_name=session_name, driver=driver)
+
+    monkeypatch.setattr(api, "load_lap_data", synthetic_test_loader)
+    api._session.cache_clear()
     client = TestClient(app)
 
     health = client.get("/api/health")
@@ -160,19 +180,28 @@ def test_fastapi_decision_contract() -> None:
         "/api/explorer",
         params={"year": 2026, "event": "Suzuka", "session_name": "R", "driver": "VER"},
     )
+    monaco_session = client.get("/api/session", params={"year": 2026, "event": "Monaco"})
+    monaco_trace = client.get("/api/trace", params={"year": 2026, "event": "Monaco"})
+    monaco_scenarios = client.get("/api/scenarios", params={"year": 2026, "event": "Monaco"})
     decision = client.get("/api/decision", params={"index": 4})
     decisions = client.get("/api/decisions", params={"start": 2, "limit": 3})
 
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
     assert session.json()["data_source"] == "Synthetic"
-    assert session.json()["event"] == "Monza"
-    assert session.json()["circuit_label"] == "Monza-like synthetic proxy"
+    assert session.json()["event"] == "Suzuka"
+    assert session.json()["circuit_label"] == "Suzuka-like synthetic proxy"
     assert selected.json()["event"] == "Suzuka"
     assert selected.json()["driver"] == "VER"
     assert "Suzuka" in selected.json()["source_detail"]
     assert options.status_code == 200
+    assert options.json()["years"] == [2026]
+    assert len(options.json()["events"]) == 24
     assert "Suzuka" in {event["event"] for event in options.json()["events"]}
+    yas_option = next(event for event in options.json()["events"] if event["event"] == "Yas Marina")
+    assert yas_option["data_available"] is False
+    assert client.get("/api/session", params={"year": 2026, "event": "Yas Marina"}).status_code == 409
+    assert client.get("/api/session", params={"year": 2025}).status_code == 422
     assert trace.status_code == 200
     assert len(trace.json()["predictive_mpc"]) > 100
     assert selected_trace.status_code == 200
@@ -181,7 +210,26 @@ def test_fastapi_decision_contract() -> None:
     assert "segment_type" in selected_trace.json()["predictive_mpc"][0]
     assert explorer.status_code == 200
     assert {row["strategy"] for row in explorer.json()["rows"]} == {"fixed_map", "predictive_mpc"}
+    assert monaco_session.status_code == 200
+    assert monaco_session.json()["event"] == "Monaco"
+    assert monaco_session.json()["lap_duration_s"] != session.json()["lap_duration_s"]
+    assert monaco_trace.status_code == 200
+    assert monaco_trace.json()["predictive_mpc"][0]["driver_command"]
+    assert monaco_scenarios.status_code == 200
+    assert len(monaco_scenarios.json()) == 4
     assert metrics.status_code == 200
     assert {row["strategy"] for row in metrics.json()["rows"]} == {"fixed_map", "predictive_mpc"}
     assert decision.json()["decision"]["command"]
     assert len(decisions.json()) == 3
+
+
+def test_fastapi_never_returns_synthetic_fallback(monkeypatch) -> None:
+    def unavailable_loader(*args, **kwargs):
+        raise FastF1DataUnavailable("test: no FastF1 data")
+
+    monkeypatch.setattr(api, "load_lap_data", unavailable_loader)
+    api._session.cache_clear()
+    response = TestClient(app).get("/api/session", params={"year": 2026, "event": "Suzuka"})
+
+    assert response.status_code == 503
+    assert "no FastF1 data" in response.json()["detail"]
