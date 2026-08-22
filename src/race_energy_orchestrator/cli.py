@@ -10,6 +10,7 @@ from .config import EnergyConfig
 from .data import load_lap_data
 from .metrics import metrics_frame
 from .model import simulate_strategy
+from .pages import render_support_pages
 from .report import render_report
 from .scenarios import compare_scenarios
 from .segmentation import add_track_features
@@ -85,7 +86,21 @@ def main(argv: list[str] | None = None) -> int:
     if trace_output is not None:
         trace_output.parent.mkdir(parents=True, exist_ok=True)
         combined_trace.to_csv(trace_output, index=False)
-    render_report(lap_data, featured, fixed, predictive, metrics, config, output_path, comparison)
+    render_report(
+        lap_data,
+        featured,
+        fixed,
+        predictive,
+        metrics,
+        config,
+        output_path,
+        comparison,
+        year=args.year,
+        event=args.event,
+        session_name=args.session,
+        driver=args.driver,
+    )
+    render_support_pages(output_path.parent, lap_data, fixed, predictive, config)
 
     print(f"Report: {output_path}")
     if metrics_output is not None:

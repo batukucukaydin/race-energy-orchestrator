@@ -26,6 +26,8 @@ python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.h
 
 All telemetry, strategy decisions, filters, charts, and scenario analysis are embedded in the self-contained HTML dashboard. CSV files are not written unless an explicit output path is provided.
 
+The dashboard begins with a synthetic live-decision replay for the race engineer. It shows the current energy recommendation, severity, reason, confidence, SoC, battery temperature, clipping risk, and time to the next high-value straight. Use the replay controls to inspect the decision stream across the lap.
+
 Scenario run with hotter ambient conditions and a lower starting battery state:
 
 ```bash
@@ -48,6 +50,24 @@ python -m http.server 8000 --directory docs
 ```
 
 Then open `http://localhost:8000`.
+
+FastAPI decision backend:
+
+```bash
+python3 -m uvicorn race_energy_orchestrator.api:app --host 127.0.0.1 --port 8001
+```
+
+API endpoints:
+
+- `GET /api/health`: service and data-source status
+- `GET /api/session`: current session metadata
+- `GET /api/metrics`: fixed-map and predictive-orchestrator KPI rows
+- `GET /api/options`: supported years, tracks, and session types
+- `GET /api/trace`: selected fixed/predictive telemetry traces for the live chart
+- `GET /api/decision?index=0`: one operator decision
+- `GET /api/decisions?start=0&limit=100`: paginated decision stream
+
+The web panel uses the API for session context, KPI values, and the live decision console. The Plotly chart is a generated session snapshot; if the API is offline, the dashboard marks the embedded replay fallback instead of presenting it as live data.
 
 Outputs:
 

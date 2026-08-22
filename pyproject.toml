@@ -12,10 +12,12 @@ dependencies = [
   "numpy>=1.24",
   "pandas>=2.0",
   "plotly>=5.0",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8.0"]
+test = ["pytest>=8.0", "httpx>=0.28"]
 
 [project.scripts]
 race-energy-orchestrator = "race_energy_orchestrator.cli:main"

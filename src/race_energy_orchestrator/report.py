@@ -10,6 +10,7 @@ from plotly.subplots import make_subplots
 
 from .config import EnergyConfig, MODEL_COLUMNS, REQUIRED_INPUT_COLUMNS
 from .data import LapData
+from .live import build_live_decision_feed
 
 
 def render_report(
@@ -21,12 +22,17 @@ def render_report(
     config: EnergyConfig,
     output_path: str | Path,
     scenario_comparison: pd.DataFrame | None = None,
+    year: int = 2024,
+    event: str = "Monza",
+    session_name: str = "Q",
+    driver: str = "LEC",
 ) -> Path:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
     fig = _build_strategy_figure(fixed_trace, predictive_trace, config)
-    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True})
+    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True}, div_id="reo-telemetry-plot")
+    live_feed = build_live_decision_feed(predictive_trace, config)
     notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
 
     html = f"""<!doctype html>
@@ -125,6 +131,79 @@ def render_report(
       min-width: 0;
       max-width: 100%;
     }}
+    .topbar {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }}
+    .topbar-label {{ color: var(--muted); font-size: 13px; font-weight: 700; }}
+    .page-nav {{ display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
+    .page-nav a {{ padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 800; text-decoration: none; }}
+    .page-nav a.active {{ border-color: var(--red); color: var(--red-deep); }}
+    .language-switch {{ display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: white; }}
+    .language-switch button {{ border: 0; border-radius: 6px; padding: 7px 11px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; }}
+    .language-switch button.active {{ background: var(--surface-strong); color: white; }}
+    .purpose {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 12px; align-items: stretch; }}
+    .purpose-card {{ padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }}
+    .purpose-card h2 {{ margin: 0 0 7px; font-size: 18px; }}
+    .purpose-card p {{ margin: 0; }}
+    .resource-links {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
+    .resource-links a {{ display: grid; gap: 5px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); text-decoration: none; box-shadow: var(--shadow); }}
+    .resource-links a:hover {{ border-color: var(--red); }}
+    .resource-links span {{ color: var(--muted); font-size: 12px; line-height: 1.4; }}
+    .session-context {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }}
+    .session-context > div {{ min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: var(--shadow); }}
+    .session-context span {{ display: block; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }}
+    .session-context b {{ display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 14px; }}
+    .panel-note {{ margin: -7px 0 12px; color: var(--muted); font-size: 12px; }}
+    .selection-bar {{ display: grid; grid-template-columns: 1fr 1.8fr 1fr 1fr auto; gap: 9px; align-items: end; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: var(--shadow); }}
+    .selection-bar label {{ display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }}
+    .selection-bar select {{ width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); font: inherit; }}
+    .selection-bar button {{ min-height: 36px; padding: 7px 12px; border: 0; border-radius: 5px; background: var(--red); color: #fff; cursor: pointer; font: inherit; font-weight: 800; }}
+    .live-console {{
+      display: grid;
+      gap: 16px;
+      padding: 20px;
+      border: 1px solid #303a45;
+      border-radius: 8px;
+      background: #171a1f;
+      color: #f7f9fc;
+      box-shadow: var(--shadow);
+    }}
+    .live-console-head, .live-console-meta, .live-controls {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }}
+    .live-console h2 {{ margin: 0; font-size: 18px; }}
+    .live-console p {{ margin: 5px 0 0; color: #b8c0c8; }}
+    .live-badge {{ padding: 5px 8px; border-radius: 5px; background: #22382d; color: #a6e3bd; font-size: 12px; font-weight: 800; }}
+    .live-decision {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 14px; }}
+    .live-command {{ min-height: 176px; padding: 18px; border-radius: 7px; border-left: 5px solid var(--teal); background: #20252c; }}
+    .live-command.warning {{ border-left-color: var(--amber); }}
+    .live-command.critical {{ border-left-color: var(--red); }}
+    .live-command small {{ display: block; color: #b8c0c8; font-weight: 800; text-transform: uppercase; }}
+    .live-command b {{ display: block; margin: 12px 0 8px; font-size: clamp(26px, 4vw, 44px); line-height: 1; }}
+    .live-command p {{ max-width: 700px; color: #edf2f6; font-size: 15px; }}
+    .live-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
+    .live-kpi {{ padding: 13px; border: 1px solid #3a434d; border-radius: 6px; background: #20252c; }}
+    .live-kpi span {{ display: block; color: #aeb9c4; font-size: 11px; font-weight: 800; text-transform: uppercase; }}
+    .live-kpi b {{ display: block; margin-top: 7px; font-size: 22px; }}
+    .live-controls {{ padding-top: 2px; border-top: 1px solid #303a45; }}
+    .live-controls button {{ width: 36px; height: 34px; border: 1px solid #4b5661; border-radius: 5px; background: #20252c; color: #fff; cursor: pointer; font-size: 15px; }}
+    .live-controls input {{ accent-color: var(--red); flex: 1 1 280px; }}
+    .live-time {{ color: #b8c0c8; font-size: 12px; font-weight: 700; }}
+    .live-stream {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }}
+    .live-stream-item {{ padding: 9px 11px; border: 1px solid #3a434d; border-radius: 6px; background: #20252c; }}
+    .live-stream-item span {{ display: block; color: #aeb9c4; font-size: 10px; font-weight: 800; text-transform: uppercase; }}
+    .live-stream-item b {{ display: block; margin-top: 4px; color: #fff; font-size: 15px; }}
+    .track-shell {{ position: relative; }}
+    .track-marker {{ position: absolute; top: -4px; bottom: -4px; width: 3px; transform: translateX(-50%); border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--red), 0 0 12px rgba(181, 18, 27, 0.8); pointer-events: none; }}
+    .decision-flow {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }}
+    .decision-step {{ padding: 12px; border-left: 3px solid var(--red); background: #f8faf8; }}
+    .decision-step b {{ display: block; margin-bottom: 5px; font-size: 13px; }}
+    .decision-step span {{ color: var(--muted); font-size: 12px; line-height: 1.4; }}
+    details.advanced-section {{ border: 1px solid var(--line); border-radius: 8px; background: #fff; }}
+    details.advanced-section > summary {{ padding: 15px 18px; cursor: pointer; font-size: 18px; font-weight: 800; list-style-position: inside; }}
+    details.advanced-section > .panel {{ border: 0; box-shadow: none; border-radius: 0; }}
     .hero {{
       min-height: 260px;
       display: grid;
@@ -416,14 +495,19 @@ def render_report(
     }}
     a {{ color: var(--red-deep); }}
     @media (max-width: 1060px) {{
-      .shell, .hero, .grid {{ grid-template-columns: 1fr; }}
+      .shell, .hero, .grid, .purpose, .live-decision {{ grid-template-columns: 1fr; }}
       aside {{ position: relative; min-height: auto; top: 0; }}
       .hero-main {{ min-height: 300px; }}
+      .session-context {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .resource-links {{ grid-template-columns: 1fr; }}
+      .selection-bar {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .live-stream {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .shell, .content, .hero, .grid, .panel {{ width: 100%; max-width: 100%; }}
     }}
     @media (max-width: 680px) {{
       main {{ width: min(100vw - 20px, 1440px); padding-top: 10px; }}
       .hero-metrics {{ grid-template-columns: 1fr; }}
+      .topbar, .decision-flow {{ grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }}
       .insight-grid {{ grid-template-columns: 1fr; }}
       .metric {{ min-height: 104px; }}
       .explorer-heading {{ align-items: start; flex-direction: column; }}
@@ -431,6 +515,8 @@ def render_report(
       .explorer-controls input[type="search"] {{ min-width: 0; width: 100%; }}
       .command {{ grid-template-columns: 1fr; }}
       .hero-main {{ min-height: 260px; padding: 26px 18px; }}
+      .session-context {{ grid-template-columns: 1fr; }}
+      .selection-bar {{ grid-template-columns: 1fr; }}
       h1 {{ max-width: min(320px, calc(100vw - 76px)); font-size: 34px; line-height: 1.02; }}
       .hero-main p, aside p {{ max-width: min(280px, calc(100vw - 96px)); font-size: 14px; }}
       .panel {{ overflow-x: auto; }}
@@ -439,6 +525,11 @@ def render_report(
 </head>
 <body>
 <main>
+  <div class="topbar">
+    <span class="topbar-label" data-i18n="panelPurpose">Race Energy Orchestrator / Energy decision cockpit</span>
+    <nav class="page-nav" aria-label="Dashboard pages"><a class="active" href="index.html">Dashboard</a><a href="explorer.html">Telemetry</a><a href="guide.html">Guide &amp; Contract</a></nav>
+    <div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div>
+  </div>
   <div class="shell">
     <aside>
       <div class="brand">
@@ -449,70 +540,222 @@ def render_report(
       {_side_summary(lap_data, metrics, predictive_trace)}
       <div class="side-block">
         <span class="side-label">Veri kaynagi</span>
-        <span class="side-value">{escape(lap_data.source)}</span>
-        <p>{escape(lap_data.source_detail)}</p>
+        <span class="side-value" id="reo-side-source">{escape(lap_data.source)}</span>
+        <p id="reo-source-detail">{escape(lap_data.source_detail)}</p>
       </div>
     </aside>
     <section class="content">
       <div class="hero">
         <div class="hero-main">
-          <span class="eyebrow">Race Energy Orchestrator</span>
-          <h1>Enerji kararlarini clipping olusmadan orkestre et.</h1>
-          <p>Dashboard, sabit enerji haritasi ile ongorulu orkestrasyon stratejisini ayni tur uzerinde karsilastirir. FastF1 verisi yoksa deterministik sentetik tur kullanilir; batarya, termal, aktif aero ve ERS sinyalleri genel model varsayimidir.</p>
+          <span class="eyebrow" data-i18n="productName">Race Energy Orchestrator</span>
+          <h1 data-i18n="heroTitle">Enerji kararlarını daha hızlı tur için yönet.</h1>
+          <p data-i18n="heroCopy">Sistem, sabit enerji haritasını öngörülü orkestrasyonla karşılaştırır ve aracın enerjiyi nerede kullanacağına karar verir.</p>
         </div>
         <div class="hero-metrics">
           {_kpi_cards(metrics, predictive_trace)}
         </div>
       </div>
 
+      <section class="session-context" aria-label="Session context">
+        <div><span data-i18n="trackLabel">Pist / Track</span><b id="reo-track-label">{escape(event)}-like synthetic proxy</b></div>
+        <div><span data-i18n="eventLabel">Yaris / Event</span><b id="reo-event-label">{escape(str(year))} {escape(event)}</b></div>
+        <div><span data-i18n="sessionLabel">Session</span><b id="reo-session-label">{escape(session_name)}</b></div>
+        <div><span data-i18n="driverLabel">Driver</span><b id="reo-driver-label">{escape(driver)}</b></div>
+        <div><span data-i18n="apiLabel">API durumu</span><b id="reo-api-state">Kontrol ediliyor</b></div>
+      </section>
+
+      <form class="selection-bar" id="reo-selection-form">
+        <label>Yil / Year<select id="reo-year-select"><option>2024</option><option>2025</option><option>2026</option></select></label>
+        <label>Yaris / Track<select id="reo-event-select"><option value="Monza">Monza</option><option value="Spa-Francorchamps">Spa-Francorchamps</option><option value="Silverstone">Silverstone</option><option value="Suzuka">Suzuka</option></select></label>
+        <label>Session<select id="reo-session-select"><option value="Q">Qualifying</option><option value="R">Race</option><option value="FP1">FP1</option><option value="FP2">FP2</option><option value="FP3">FP3</option></select></label>
+        <label>Driver<select id="reo-driver-select"><option value="LEC">LEC</option><option value="VER">VER</option><option value="NOR">NOR</option><option value="HAM">HAM</option></select></label>
+        <button type="submit">Veriyi yükle</button>
+      </form>
+      <script>
+        (() => {{
+          const query = new URLSearchParams(window.location.search);
+          const selection = {{ year: query.get('year') || '2024', event: query.get('event') || 'Monza', session_name: query.get('session_name') || query.get('session') || 'Q', driver: query.get('driver') || 'LEC' }};
+          window.reoSelectionQuery = new URLSearchParams(selection).toString();
+          const setValue = (id, value) => {{ const node = document.getElementById(id); if (node) node.value = value; }};
+          setValue('reo-year-select', selection.year);
+          setValue('reo-event-select', selection.event);
+          setValue('reo-session-select', selection.session_name);
+          setValue('reo-driver-select', selection.driver);
+          document.getElementById('reo-selection-form').addEventListener('submit', event => {{
+            event.preventDefault();
+            const next = new URLSearchParams({{ year: document.getElementById('reo-year-select').value, event: document.getElementById('reo-event-select').value, session_name: document.getElementById('reo-session-select').value, driver: document.getElementById('reo-driver-select').value }});
+            window.location.search = next.toString();
+          }});
+        }})();
+      </script>
+
+      {_live_decision_console(live_feed, lap_data.source)}
+
+      <script>
+        (() => {{
+          const apiBase = 'http://localhost:8001';
+          const selectedQuery = window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
+          const setText = (id, value) => {{ const node = document.getElementById(id); if (node) node.textContent = value; }};
+          const syncDashboardContext = async () => {{
+            try {{
+              const [sessionResponse, metricsResponse] = await Promise.all([
+                fetch(`${{apiBase}}/api/session${{selectedQuery}}`, {{ cache: 'no-store' }}),
+                fetch(`${{apiBase}}/api/metrics${{selectedQuery}}`, {{ cache: 'no-store' }})
+              ]);
+              if (!sessionResponse.ok || !metricsResponse.ok) throw new Error('API unavailable');
+              const session = await sessionResponse.json();
+              const metricPayload = await metricsResponse.json();
+              const rows = metricPayload.rows || [];
+              const fixed = rows.find(row => row.strategy === 'fixed_map');
+              const predictive = rows.find(row => row.strategy === 'predictive_mpc');
+              if (!fixed || !predictive) throw new Error('Metrics unavailable');
+              const lapDelta = Number(fixed.lap_time_proxy_s) - Number(predictive.lap_time_proxy_s);
+              const clippingDelta = Number(fixed.clipping_duration_s) - Number(predictive.clipping_duration_s);
+              setText('reo-track-label', session.circuit_label);
+              setText('reo-event-label', `${{session.year}} ${{session.event}}`);
+              setText('reo-session-label', session.session_name);
+              setText('reo-driver-label', session.driver);
+              setText('reo-side-source', session.data_source);
+              setText('reo-source-detail', session.source_detail);
+              setText('reo-api-state', `LIVE · ${{session.data_mode}}`);
+              setText('reo-kpi-lap', `${{lapDelta.toFixed(3)}}s`);
+              setText('reo-kpi-clipping', `${{clippingDelta.toFixed(1)}}s`);
+              setText('reo-kpi-soc', `${{(Number(predictive.end_soc_mj) / 4 * 100).toFixed(1)}}%`);
+              setText('reo-kpi-soc-detail', `${{Number(predictive.end_soc_mj).toFixed(3)}} MJ`);
+              setText('reo-side-lap', `${{lapDelta.toFixed(3)}} s`);
+              setText('reo-side-clipping', `${{Number(predictive.clipping_duration_s).toFixed(3)}} s`);
+              setText('reo-side-risk', Number(predictive.max_clipping_risk).toFixed(2));
+            }} catch (error) {{
+              setText('reo-api-state', 'EMBEDDED FALLBACK');
+            }}
+          }};
+          syncDashboardContext();
+          window.setInterval(syncDashboardContext, 3000);
+        }})();
+      </script>
+
+      <div class="purpose">
+        <div class="purpose-card">
+          <h2 data-i18n="mainQuestion">Bu panel neyi cevaplıyor?</h2>
+          <p data-i18n="mainAnswer">Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?</p>
+          <div class="decision-flow">
+            <div class="decision-step"><b data-i18n="stepObserve">1. Veriyi oku</b><span data-i18n="stepObserveCopy">Pist segmenti, hız, SoC ve batarya sıcaklığını izler.</span></div>
+            <div class="decision-step"><b data-i18n="stepPredict">2. İleriyi tahmin et</b><span data-i18n="stepPredictCopy">Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.</span></div>
+            <div class="decision-step"><b data-i18n="stepDecide">3. Karar ver</b><span data-i18n="stepDecideCopy">Deploy, regen veya enerji koruma komutunu üretir.</span></div>
+          </div>
+        </div>
+        <div class="purpose-card">
+          <h2 data-i18n="readingGuide">Nasıl okunmalı?</h2>
+          <p data-i18n="readingGuideCopy">Önce üstteki sonuçlara bak. Orchestrator satırı sabit haritadan daha iyi ise strateji avantaj sağlıyor. Sonra karar akışı ve telemetriyi açarak nedenini incele.</p>
+        </div>
+      </div>
+
       <div class="panel">
-        <h2>Orchestrator Insight</h2>
+        <h2 data-i18n="insightTitle">Ana sonuç</h2>
         {_orchestrator_insights(metrics, predictive_trace, config)}
       </div>
 
-      {_data_explorer_panel(fixed_trace, predictive_trace)}
+      {_support_links()}
 
       {_scenario_comparison_panel(scenario_comparison)}
 
       <div class="panel">
-        <h2>Pist Enerji Seridi</h2>
+        <h2 data-i18n="trackTitle">Pistte enerji planı</h2>
         {_track_ribbon(base_frame)}
       </div>
 
       <div class="grid">
         <div class="panel plot-panel">
-          <h2>Strateji Telemetrisi</h2>
+          <h2 data-i18n="telemetryTitle">Strateji grafiği / Oturum snapshot'ı</h2>
+          <p class="panel-note" data-i18n="telemetryNote">Grafik, API oturumundan üretilen karşılaştırma snapshot'ıdır. Canlı karar ve KPI değerleri API'den güncellenir.</p>
           {plot_html}
+          <script>
+            (() => {{
+              const selectedQuery = window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
+              const updateTelemetry = row => {{
+                if (!row) return;
+                const plot = document.getElementById('reo-telemetry-plot');
+                if (plot && window.Plotly) {{
+                  window.Plotly.relayout(plot, {{ 'shapes[2].x0': row.distance_m, 'shapes[2].x1': row.distance_m }});
+                }}
+                const marker = document.getElementById('reo-track-marker');
+                const total = Number(window.reoLapDistanceM || 1);
+                if (marker) marker.style.left = `${{Math.max(0, Math.min(100, row.distance_m / total * 100))}}%`;
+              }};
+              window.reoUpdateTelemetry = updateTelemetry;
+              if (window.reoLiveRow) updateTelemetry(window.reoLiveRow);
+              const updatePlotForSelection = async () => {{
+                const plot = document.getElementById('reo-telemetry-plot');
+                if (!plot || !window.Plotly) return;
+                try {{
+                  const response = await fetch(`http://localhost:8001/api/trace${{selectedQuery}}`, {{ cache: 'no-store' }});
+                  if (!response.ok) throw new Error('Trace unavailable');
+                  const payload = await response.json();
+                  const fixed = payload.fixed_map;
+                  const predictive = payload.predictive_mpc;
+                  const x = predictive.map(row => row.distance_m);
+                  const updates = [
+                    {{ x: [x], y: [predictive.map(row => row.speed_kmh)] }},
+                    {{ x: [x], y: [predictive.map(row => row.aero_mode === 'X_MODE' ? 100 : 0)] }},
+                    {{ x: [x], y: [fixed.map(row => row.deploy_kw)] }},
+                    {{ x: [x], y: [predictive.map(row => row.deploy_kw)] }},
+                    {{ x: [x], y: [fixed.map(row => -row.regen_kw)] }},
+                    {{ x: [x], y: [predictive.map(row => -row.regen_kw)] }},
+                    {{ x: [x], y: [fixed.map(row => row.soc_mj)] }},
+                    {{ x: [x], y: [predictive.map(row => row.soc_mj)] }},
+                    {{ x: [x], y: [fixed.map(row => row.clipping_risk)] }},
+                    {{ x: [x], y: [predictive.map(row => row.clipping_risk)] }},
+                    {{ x: [x], y: [fixed.map(row => row.battery_temp_c)] }},
+                    {{ x: [x], y: [predictive.map(row => row.battery_temp_c)] }}
+                  ];
+                  for (let index = 0; index < updates.length; index += 1) window.Plotly.restyle(plot, updates[index], [index]);
+                  window.reoLapDistanceM = x.length ? Number(x[x.length - 1]) : 1;
+                  updateTelemetry(predictive[0]);
+                }} catch (error) {{
+                  console.warn('Trace API unavailable; keeping embedded chart.', error);
+                }}
+              }};
+              updatePlotForSelection();
+            }})();
+          </script>
         </div>
         <div class="panel">
-          <h2>Surucu Komut Akisi</h2>
+          <h2 data-i18n="commandsTitle">Sistemin verdiği kararlar</h2>
           {_command_timeline(predictive_trace)}
         </div>
       </div>
 
       <div class="grid">
         <div class="panel">
-          <h2>Strateji Karsilastirmasi</h2>
+          <h2 data-i18n="comparisonTitle">Sabit harita / Orchestrator</h2>
           {_format_metrics(metrics)}
         </div>
         <div class="panel">
-          <h2>Segment Ozeti</h2>
+          <h2 data-i18n="segmentTitle">Pist segmentleri</h2>
           {_segment_summary(base_frame)}
         </div>
       </div>
 
-      <div class="panel">
-        <h2>Varsayimlar ve Veri Sozlesmesi</h2>
-        <p>Bu prototip takim ozel telemetri veya gercek arac parametresi kullanmaz. Varsayimlar genel hibrit yaris araci enerji yonetimi modelini gostermek icindir.</p>
-        <p>Senaryo: ortam {config.ambient_temp_c:.1f}C, baslangic SoC {config.initial_soc_mj:.2f} MJ, baslangic batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.</p>
-        <p>Girdi kolonlari: {", ".join(f"<code>{col}</code>" for col in REQUIRED_INPUT_COLUMNS)}</p>
-        <p>Model kolonlari: {", ".join(f"<code>{col}</code>" for col in MODEL_COLUMNS)}</p>
-        <ul>{notes_html}</ul>
-        <p><a href="{config.reference_links[0]}">FIA Formula One regulations category</a> | <a href="{config.reference_links[1]}">FIA 2026 Technical Regulations Section C, Issue 18 PDF</a></p>
-      </div>
     </section>
   </div>
 </main>
+<script>
+  (() => {{
+    const dictionary = {{
+      tr: {{ panelPurpose: "Race Energy Orchestrator / Enerji karar paneli", productName: "Race Energy Orchestrator", heroTitle: "Enerji kararlarını daha hızlı tur için yönet.", heroCopy: "Sistem, sabit enerji haritasını öngörülü orkestrasyonla karşılaştırır ve aracın enerjiyi nerede kullanacağına karar verir.", mainQuestion: "Bu panel neyi cevaplıyor?", mainAnswer: "Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?", stepObserve: "1. Veriyi oku", stepObserveCopy: "Pist segmenti, hız, SoC ve batarya sıcaklığını izler.", stepPredict: "2. İleriyi tahmin et", stepPredictCopy: "Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.", stepDecide: "3. Karar ver", stepDecideCopy: "Deploy, regen veya enerji koruma komutunu üretir.", readingGuide: "Nasıl okunmalı?", readingGuideCopy: "Önce üstteki sonuçlara bak. Orchestrator satırı sabit haritadan daha iyi ise strateji avantaj sağlıyor. Sonra karar akışı ve telemetriyi açarak nedenini incele.", insightTitle: "Ana sonuç", trackTitle: "Pistte enerji planı", telemetryTitle: "Strateji grafiği / Oturum snapshot'ı", telemetryNote: "Grafik, API oturumundan üretilen karşılaştırma snapshot'ıdır. Canlı karar ve KPI değerleri API'den güncellenir.", trackLabel: "Pist", eventLabel: "Yarış", sessionLabel: "Session", driverLabel: "Sürücü", apiLabel: "API durumu", commandsTitle: "Sistemin verdiği kararlar", comparisonTitle: "Sabit harita / Orchestrator", segmentTitle: "Pist segmentleri", assumptionsTitle: "Model varsayımları ve veri sözleşmesi", scenarioTitle: "Senaryo doğrulaması", rawDataTitle: "Ham telemetriyi incele", rawDataHeading: "Telemetri veri gezgini", rawDataCopy: "Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.", strategyFilter: "Strateji", allOption: "Tümü", fixedOption: "Sabit harita", searchFilter: "Arama", incidentFilter: "Clipping / termal limit", clearFilters: "Filtreleri temizle" }},
+      en: {{ panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", productName: "Race Energy Orchestrator", heroTitle: "Manage energy decisions for a faster lap.", heroCopy: "The system compares a fixed energy map with predictive orchestration and decides where the car should use its energy.", mainQuestion: "What question does this panel answer?", mainAnswer: "Across the lap, when should limited hybrid energy be deployed, regenerated, or protected?", stepObserve: "1. Read the data", stepObserveCopy: "Track segment, speed, SoC, and battery temperature are monitored.", stepPredict: "2. Look ahead", stepPredictCopy: "Long straights and braking zones are evaluated ahead of the car.", stepDecide: "3. Make the decision", stepDecideCopy: "The system produces deploy, regen, or energy-save commands.", readingGuide: "How should I read it?", readingGuideCopy: "Start with the results above. If the Orchestrator row beats the fixed map, the strategy has an advantage. Open the decision flow and telemetry to understand why.", insightTitle: "Key result", trackTitle: "Energy plan on track", telemetryTitle: "Strategy telemetry / Session snapshot", telemetryNote: "This chart is a comparison snapshot generated from the API session. Live decisions and KPI values are API-backed.", trackLabel: "Track", eventLabel: "Event", sessionLabel: "Session", driverLabel: "Driver", apiLabel: "API status", commandsTitle: "System decisions", comparisonTitle: "Fixed map / Orchestrator", segmentTitle: "Track segments", assumptionsTitle: "Model assumptions and data contract", scenarioTitle: "Scenario validation", rawDataTitle: "Inspect raw telemetry", rawDataHeading: "Telemetry data explorer", rawDataCopy: "The full decision stream lives here. Explore strategy, risk, and commands without opening a file.", strategyFilter: "Strategy", allOption: "All", fixedOption: "Fixed map", searchFilter: "Search", incidentFilter: "Clipping / thermal limit", clearFilters: "Clear filters" }}
+    }};
+    const setLanguage = language => {{
+      document.documentElement.lang = language === 'en' ? 'en' : 'tr';
+      document.querySelectorAll('[data-i18n]').forEach(node => {{ node.textContent = dictionary[language][node.dataset.i18n] || node.textContent; }});
+      document.getElementById('lang-tr').classList.toggle('active', language === 'tr');
+      document.getElementById('lang-en').classList.toggle('active', language === 'en');
+      window.dispatchEvent(new CustomEvent('reo-language-change', {{ detail: language }}));
+    }};
+    document.getElementById('lang-tr').addEventListener('click', () => setLanguage('tr'));
+    document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+  }})();
+</script>
 </body>
 </html>
 """
@@ -559,6 +802,16 @@ def _build_strategy_figure(
     fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Sabit batarya C", line=dict(color="#bf7a00")), row=5, col=1)
     fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Orchestrator batarya C", line=dict(color="#2f7d4f", width=2)), row=5, col=1)
     fig.add_hline(y=config.battery_soft_limit_c, row=5, col=1, line=dict(color="#b5121b", dash="dash"))
+    fig.add_shape(
+        type="line",
+        x0=float(x.iloc[0]),
+        x1=float(x.iloc[0]),
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(color="#b5121b", width=2, dash="dot"),
+    )
 
     fig.update_yaxes(title_text="km/h", row=1, col=1)
     fig.update_yaxes(title_text="kW", row=2, col=1)
@@ -586,15 +839,15 @@ def _side_summary(lap_data: LapData, metrics: pd.DataFrame, predictive_trace: pd
     return f"""
       <div class="side-block">
         <span class="side-label">Lap proxy kazanci</span>
-        <span class="side-value">{lap_delta:.3f} s</span>
+        <span class="side-value" id="reo-side-lap">{lap_delta:.3f} s</span>
       </div>
       <div class="side-block">
         <span class="side-label">Orchestrator clipping</span>
-        <span class="side-value">{predictive["clipping_duration_s"]:.3f} s</span>
+        <span class="side-value" id="reo-side-clipping">{predictive["clipping_duration_s"]:.3f} s</span>
       </div>
       <div class="side-block">
         <span class="side-label">Peak risk</span>
-        <span class="side-value">{risk_peak:.2f}</span>
+        <span class="side-value" id="reo-side-risk">{risk_peak:.2f}</span>
       </div>
 """
 
@@ -619,7 +872,7 @@ def _scenario_comparison_panel(comparison: pd.DataFrame | None) -> str:
         )
     return f"""
       <div class="panel">
-        <h2>Scenario Validation</h2>
+        <h2 data-i18n="scenarioTitle">Senaryo doğrulaması</h2>
         <p>Orchestrator performansi, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.</p>
         <div style="overflow-x:auto">
           <table>
@@ -628,6 +881,131 @@ def _scenario_comparison_panel(comparison: pd.DataFrame | None) -> str:
           </table>
         </div>
       </div>
+"""
+
+
+def _support_links() -> str:
+    return """
+      <section class="resource-links" aria-label="Supporting pages">
+        <a href="explorer.html"><b>Telemetry Explorer</b><span>Ham karar kayıtlarını filtrele, karşılaştır ve incele.</span></a>
+        <a href="guide.html"><b>Guide &amp; Data Contract</b><span>Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.</span></a>
+      </section>
+"""
+
+
+def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
+    payload = json.dumps(feed.to_dict(orient="records"), ensure_ascii=True, allow_nan=False)
+    source_label = "SYNTHETIC REPLAY" if source.lower() == "synthetic" else escape(source.upper())
+    return f"""
+      <section class="live-console" aria-live="polite">
+        <div class="live-console-head">
+          <div><h2 id="reo-live-title">Canlı karar konsolu</h2><p id="reo-live-subtitle">Yarış mühendisi için anlık enerji önerisi</p></div>
+          <span class="live-badge" id="reo-live-source">{source_label}</span>
+        </div>
+        <div class="live-decision">
+          <div class="live-command" id="reo-live-command">
+            <small id="reo-live-status">NORMAL</small>
+            <b id="reo-live-action">ENERGY HOLD</b>
+            <p id="reo-live-reason"></p>
+          </div>
+          <div class="live-kpis">
+            <div class="live-kpi"><span id="reo-live-soc-label">Energy Store</span><b id="reo-live-soc">-</b></div>
+            <div class="live-kpi"><span id="reo-live-temp-label">Batarya</span><b id="reo-live-temp">-</b></div>
+            <div class="live-kpi"><span id="reo-live-risk-label">Clipping riski</span><b id="reo-live-risk">-</b></div>
+            <div class="live-kpi"><span id="reo-live-next-label">Sonraki düzlük</span><b id="reo-live-next">-</b></div>
+          </div>
+        </div>
+        <div class="live-stream" aria-label="Live telemetry">
+          <div class="live-stream-item"><span>Speed</span><b id="reo-live-speed">-</b></div>
+          <div class="live-stream-item"><span>Deploy</span><b id="reo-live-deploy">-</b></div>
+          <div class="live-stream-item"><span>Regen</span><b id="reo-live-regen">-</b></div>
+          <div class="live-stream-item"><span>Aero</span><b id="reo-live-aero">-</b></div>
+          <div class="live-stream-item"><span>Segment</span><b id="reo-live-segment">-</b></div>
+        </div>
+        <div class="live-console-meta"><span class="live-time" id="reo-live-context"></span><span class="live-time" id="reo-live-confidence"></span></div>
+        <div class="live-controls">
+          <button id="reo-live-play" type="button" aria-label="Play">&#9654;</button>
+          <button id="reo-live-pause" type="button" aria-label="Pause">&#10074;&#10074;</button>
+          <input id="reo-live-seek" type="range" min="0" value="0" aria-label="Replay position">
+          <span class="live-time" id="reo-live-clock"></span>
+        </div>
+      </section>
+      <script>
+        (() => {{
+          const feed = {payload};
+          window.reoLapDistanceM = feed.length ? Number(feed[feed.length - 1].distance_m) : 1;
+          const selectedQuery = window.reoSelectionQuery ? `&${{window.reoSelectionQuery}}` : '';
+          const labels = {{
+            tr: {{ title: 'Canlı karar konsolu', subtitle: 'Yarış mühendisi için anlık enerji önerisi', soc: 'Energy Store', temp: 'Batarya', risk: 'Clipping riski', next: 'Sonraki düzlük', confidence: 'Güven', context: 'Tur içi konum' }},
+            en: {{ title: 'Live decision console', subtitle: 'Real-time energy recommendation for the race engineer', soc: 'Energy Store', temp: 'Battery', risk: 'Clipping risk', next: 'Next straight', confidence: 'Confidence', context: 'Lap position' }}
+          }};
+          let index = 0;
+          let timer = null;
+          let language = document.documentElement.lang === 'en' ? 'en' : 'tr';
+          const seek = document.getElementById('reo-live-seek');
+          seek.max = String(Math.max(feed.length - 1, 0));
+          const localize = () => {{
+            const copy = labels[language];
+            document.getElementById('reo-live-title').textContent = copy.title;
+            document.getElementById('reo-live-subtitle').textContent = copy.subtitle;
+            document.getElementById('reo-live-soc-label').textContent = copy.soc;
+            document.getElementById('reo-live-temp-label').textContent = copy.temp;
+            document.getElementById('reo-live-risk-label').textContent = copy.risk;
+            document.getElementById('reo-live-next-label').textContent = copy.next;
+          }};
+          const renderRow = row => {{
+            if (!row) return;
+            window.reoLiveRow = row;
+            if (window.reoUpdateTelemetry) window.reoUpdateTelemetry(row);
+            const copy = labels[language];
+            const command = document.getElementById('reo-live-command');
+            command.className = `live-command ${{row.severity}}`;
+            document.getElementById('reo-live-status').textContent = row.severity.toUpperCase();
+            document.getElementById('reo-live-action').textContent = row.command;
+            document.getElementById('reo-live-reason').textContent = language === 'en' ? row.reason_en : row.reason_tr;
+            document.getElementById('reo-live-soc').textContent = `${{row.soc_mj.toFixed(2)}} MJ`;
+            document.getElementById('reo-live-temp').textContent = `${{row.battery_temp_c.toFixed(1)}} C`;
+            document.getElementById('reo-live-risk').textContent = `${{Math.round(row.clipping_risk * 100)}}%`;
+            document.getElementById('reo-live-next').textContent = row.next_straight_eta_s > 0 ? `${{row.next_straight_eta_s.toFixed(1)}} s` : '—';
+            document.getElementById('reo-live-speed').textContent = `${{row.speed_kmh.toFixed(0)}} km/h`;
+            document.getElementById('reo-live-deploy').textContent = `${{row.deploy_kw.toFixed(1)}} kW`;
+            document.getElementById('reo-live-regen').textContent = `${{row.regen_kw.toFixed(1)}} kW`;
+            document.getElementById('reo-live-aero').textContent = row.aero_mode;
+            document.getElementById('reo-live-segment').textContent = row.segment_type;
+            document.getElementById('reo-live-context').textContent = `${{copy.context}}: ${{row.time_s.toFixed(1)}} s · ${{row.distance_m.toFixed(0)}} m · ${{row.segment_type}}`;
+            document.getElementById('reo-live-confidence').textContent = `${{copy.confidence}}: ${{row.confidence_pct.toFixed(0)}}%`;
+            document.getElementById('reo-live-clock').textContent = `${{row.time_s.toFixed(1)}} s`;
+            seek.value = String(index);
+          }};
+          const render = () => renderRow(feed[index]);
+          const syncApi = async () => {{
+            try {{
+              const response = await fetch(`http://localhost:8001/api/decision?index=${{index}}${{selectedQuery}}`, {{ cache: 'no-store' }});
+              if (!response.ok) throw new Error('API unavailable');
+              const payload = await response.json();
+              seek.max = String(Math.max(Number(payload.total) - 1, 0));
+              index = Math.min(index, Number(payload.total) - 1);
+              renderRow(payload.decision);
+              document.getElementById('reo-live-source').textContent = 'API LIVE';
+            }} catch (error) {{
+              document.getElementById('reo-live-source').textContent = 'SYNTHETIC REPLAY';
+              render();
+            }}
+          }};
+          const play = () => {{
+            if (timer || feed.length < 2) return;
+            timer = window.setInterval(() => {{ index = (index + 1) % feed.length; syncApi(); }}, 120);
+          }};
+          const pause = () => {{ if (timer) {{ window.clearInterval(timer); timer = null; }} }};
+          document.getElementById('reo-live-play').addEventListener('click', play);
+          document.getElementById('reo-live-pause').addEventListener('click', pause);
+          seek.addEventListener('input', () => {{ index = Number(seek.value); syncApi(); }});
+          window.addEventListener('reo-language-change', event => {{ language = event.detail; localize(); render(); }});
+          localize();
+          render();
+          syncApi();
+        }})();
+      </script>
 """
 
 
@@ -652,27 +1030,29 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
         records.extend(frame.to_dict(orient="records"))
     payload = json.dumps(records, ensure_ascii=True, allow_nan=False)
     return f"""
-      <div class="panel data-explorer">
+      <details class="advanced-section">
+        <summary data-i18n="rawDataTitle">Ham telemetriyi incele</summary>
+        <div class="panel data-explorer">
         <div class="explorer-heading">
           <div>
-            <h2>Telemetry Data Explorer</h2>
-            <p>Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.</p>
+        <h2 data-i18n="rawDataHeading">Telemetry Data Explorer</h2>
+            <p data-i18n="rawDataCopy">Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.</p>
           </div>
           <span class="pill" id="reo-row-count">0 kayıt</span>
         </div>
         <div class="explorer-controls">
-          <label>Strateji
+          <label><span data-i18n="strategyFilter">Strateji</span>
             <select id="reo-strategy-filter">
-              <option value="all">Tümü</option>
+              <option value="all" data-i18n="allOption">Tümü</option>
               <option value="predictive_mpc">Orchestrator</option>
-              <option value="fixed_map">Sabit harita</option>
+              <option value="fixed_map" data-i18n="fixedOption">Sabit harita</option>
             </select>
           </label>
-          <label>Arama
+          <label><span data-i18n="searchFilter">Arama</span>
             <input id="reo-text-filter" type="search" placeholder="komut, segment veya değer ara">
           </label>
-          <label class="check-label"><input id="reo-clipping-filter" type="checkbox"> Clipping / termal limit</label>
-          <button id="reo-reset-filter" type="button">Filtreleri temizle</button>
+          <label class="check-label"><input id="reo-clipping-filter" type="checkbox"> <span data-i18n="incidentFilter">Clipping / termal limit</span></label>
+          <button id="reo-reset-filter" type="button" data-i18n="clearFilters">Filtreleri temizle</button>
         </div>
         <div class="explorer-table-wrap">
           <table>
@@ -684,7 +1064,8 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
           <span id="reo-page-label">Sayfa 1</span>
           <div class="explorer-pages"><button id="reo-prev-page" type="button">Onceki</button><button id="reo-next-page" type="button">Sonraki</button></div>
         </div>
-      </div>
+        </div>
+      </details>
       <script>
         (() => {{
           const allRows = {payload};
@@ -739,10 +1120,10 @@ def _kpi_cards(metrics: pd.DataFrame, predictive_trace: pd.DataFrame) -> str:
     soc_pct = predictive["end_soc_mj"] / 4.0 * 100.0
     attack_count = int(predictive_trace["driver_command"].isin(["DEPLOY ATTACK", "OVERTAKE READY"]).sum())
     return f"""
-          <div class="metric"><span>Lap proxy iyilesme</span><b>{lap_delta:.3f}s</b><small>Sabit haritaya gore</small></div>
-          <div class="metric"><span>Clipping azalimi</span><b>{clipping_delta:.1f}s</b><small>Orchestrator stratejisi</small></div>
-          <div class="metric"><span>Final SoC</span><b>{soc_pct:.1f}%</b><small>{predictive["end_soc_mj"]:.3f} MJ</small></div>
-          <div class="metric"><span>Atak hazirligi</span><b>{attack_count}</b><small>Deploy komut noktasi</small></div>
+          <div class="metric"><span>Lap proxy iyilesme</span><b id="reo-kpi-lap">{lap_delta:.3f}s</b><small>Sabit haritaya gore</small></div>
+          <div class="metric"><span>Clipping azalimi</span><b id="reo-kpi-clipping">{clipping_delta:.1f}s</b><small>Orchestrator stratejisi</small></div>
+          <div class="metric"><span>Final SoC</span><b id="reo-kpi-soc">{soc_pct:.1f}%</b><small id="reo-kpi-soc-detail">{predictive["end_soc_mj"]:.3f} MJ</small></div>
+          <div class="metric"><span>Atak hazirligi</span><b id="reo-kpi-attack">{attack_count}</b><small>Deploy komut noktasi</small></div>
 """
 
 
@@ -830,7 +1211,7 @@ def _track_ribbon(frame: pd.DataFrame) -> str:
     legend = "".join(
         f'<span><i style="background:{color}"></i>{escape(labels[key])}</span>' for key, color in colors.items()
     )
-    return f'<div class="track">{"".join(chunks)}</div><div class="legend">{legend}</div>'
+    return f'<div class="track-shell"><div class="track">{"".join(chunks)}</div><i class="track-marker" id="reo-track-marker" style="left:0%"></i></div><div class="legend">{legend}</div>'
 
 
 def _command_timeline(trace: pd.DataFrame) -> str:

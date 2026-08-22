@@ -6,9 +6,12 @@ from race_energy_orchestrator.cli import main
 from race_energy_orchestrator.config import EnergyConfig
 from race_energy_orchestrator.data import generate_synthetic_lap
 from race_energy_orchestrator.metrics import metrics_frame
+from race_energy_orchestrator.live import build_live_decision_feed
 from race_energy_orchestrator.model import simulate_strategy
 from race_energy_orchestrator.segmentation import add_track_features
 from race_energy_orchestrator.scenarios import compare_scenarios
+from race_energy_orchestrator.api import app
+from fastapi.testclient import TestClient
 
 
 def _synthetic_featured(config: EnergyConfig | None = None) -> pd.DataFrame:
@@ -83,7 +86,10 @@ def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
     assert result == 0
     assert report.exists() and report.stat().st_size > 1000
     assert "Race Energy Orchestrator" in report.read_text(encoding="utf-8")
-    assert "Telemetry Data Explorer" in report.read_text(encoding="utf-8")
+    assert "Telemetry Explorer" in report.read_text(encoding="utf-8")
+    assert "Canlı karar konsolu" in report.read_text(encoding="utf-8")
+    assert (tmp_path / "explorer.html").exists()
+    assert (tmp_path / "guide.html").exists()
     assert not (tmp_path / "metrics.csv").exists()
     assert not (tmp_path / "strategy_trace.csv").exists()
 
@@ -108,9 +114,9 @@ def test_cli_scenario_overrides_are_reflected_in_report(tmp_path) -> None:
     )
 
     assert result == 0
-    html = report.read_text(encoding="utf-8")
+    html = (tmp_path / "guide.html").read_text(encoding="utf-8")
     assert "ortam 34.0C" in html
-    assert "baslangic SoC 2.60 MJ" in html
+    assert "başlangıç SoC 2.60 MJ" in html
 
 
 def test_scenario_comparison_covers_expected_conditions() -> None:
@@ -121,3 +127,47 @@ def test_scenario_comparison_covers_expected_conditions() -> None:
     assert comparison["lap_gain_s"].notna().all()
     assert comparison["clipping_reduction_s"].notna().all()
     assert comparison["orchestrator_end_soc_mj"].between(config.minimum_soc_mj, config.usable_energy_mj).all()
+
+
+def test_live_decision_feed_exposes_actionable_operator_fields() -> None:
+    config = EnergyConfig(initial_battery_temp_c=64.0)
+    trace = simulate_strategy(_synthetic_featured(config), config, "predictive_mpc")
+    feed = build_live_decision_feed(trace, config)
+
+    assert len(feed) == len(trace)
+    assert {"command", "severity", "reason_tr", "reason_en", "confidence_pct"}.issubset(feed.columns)
+    assert (feed["confidence_pct"] >= 65.0).all()
+    assert (feed["command"] == "THERMAL PROTECT").any()
+
+
+def test_fastapi_decision_contract() -> None:
+    client = TestClient(app)
+
+    health = client.get("/api/health")
+    session = client.get("/api/session")
+    metrics = client.get("/api/metrics")
+    selected = client.get(
+        "/api/session",
+        params={"year": 2026, "event": "Suzuka", "session_name": "R", "driver": "VER"},
+    )
+    options = client.get("/api/options")
+    trace = client.get("/api/trace", params={"event": "Suzuka"})
+    decision = client.get("/api/decision", params={"index": 4})
+    decisions = client.get("/api/decisions", params={"start": 2, "limit": 3})
+
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+    assert session.json()["data_source"] == "Synthetic"
+    assert session.json()["event"] == "Monza"
+    assert session.json()["circuit_label"] == "Monza-like synthetic proxy"
+    assert selected.json()["event"] == "Suzuka"
+    assert selected.json()["driver"] == "VER"
+    assert "Suzuka" in selected.json()["source_detail"]
+    assert options.status_code == 200
+    assert "Suzuka" in {event["event"] for event in options.json()["events"]}
+    assert trace.status_code == 200
+    assert len(trace.json()["predictive_mpc"]) > 100
+    assert metrics.status_code == 200
+    assert {row["strategy"] for row in metrics.json()["rows"]} == {"fixed_map", "predictive_mpc"}
+    assert decision.json()["decision"]["command"]
+    assert len(decisions.json()) == 3
