@@ -98,7 +98,7 @@ def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
     assert result == 0
     assert report.exists() and report.stat().st_size > 1000
     assert "Race Energy Orchestrator" in report.read_text(encoding="utf-8")
-    assert "Telemetry Explorer" in report.read_text(encoding="utf-8")
+    assert 'href="explorer.html' in report.read_text(encoding="utf-8")
     assert "Canlı karar konsolu" in report.read_text(encoding="utf-8")
     assert (tmp_path / "explorer.html").exists()
     assert (tmp_path / "guide.html").exists()

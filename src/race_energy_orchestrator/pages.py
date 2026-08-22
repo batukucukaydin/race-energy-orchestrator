@@ -40,8 +40,8 @@ def _shell(title: str, body: str, api_base: str) -> str:
     [data-theme="dark"] {{ --bg:#0d1116; --surface:#151b22; --ink:#eef3f7; --muted:#aab6c1; --line:#303b47; --shadow:0 14px 34px rgba(0,0,0,.28); }}
     * {{ box-sizing:border-box; }}
     body {{ margin:0; color:var(--ink); background:var(--bg); font-family:"Avenir Next","Segoe UI",sans-serif; transition:background .18s ease,color .18s ease; }}
-    main {{ width:min(1380px,calc(100vw - 32px)); margin:auto; padding:24px 0 48px; }}
-    header {{ display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; min-height:40px; }}
+    main {{ width:min(1440px,calc(100vw - 32px)); margin:auto; padding:12px 0 48px; }}
+    header {{ display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; min-height:48px; position:sticky; top:0; z-index:20; padding:8px 0; background:var(--bg); }}
     header strong {{ font-size:15px; }}
     nav {{ display:flex; flex-wrap:wrap; gap:6px; }}
     nav a {{ padding:7px 10px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font-size:12px; font-weight:800; text-decoration:none; transition:border-color .18s ease,background .18s ease; }}
@@ -52,9 +52,9 @@ def _shell(title: str, body: str, api_base: str) -> str:
     .language-switch button, .theme-toggle {{ min-height:30px; border:0; border-radius:5px; padding:5px 9px; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:12px; font-weight:800; }}
     .language-switch button.active, .theme-toggle {{ background:var(--ink); color:var(--bg); }}
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] button {{ color-scheme:dark; }}
-    .hero {{ padding:22px; margin-bottom:16px; }}
-    h1 {{ margin:0 0 7px; font-size:clamp(28px,4vw,48px); }}
-    h2 {{ margin:0 0 10px; font-size:20px; }}
+    .hero {{ padding:18px 20px; margin-bottom:16px; }}
+    h1 {{ margin:0 0 7px; font-size:clamp(26px,3vw,36px); line-height:1.12; }}
+    h2 {{ margin:0 0 10px; font-size:18px; }}
     h3 {{ margin:0 0 7px; font-size:15px; }}
     p, li {{ color:var(--muted); line-height:1.55; }}
     .panel {{ padding:18px; margin-bottom:16px; }}
@@ -71,14 +71,17 @@ def _shell(title: str, body: str, api_base: str) -> str:
     .advanced-section > summary {{ cursor:pointer; font-size:20px; font-weight:800; list-style:none; }}
     .explorer-controls {{ display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:15px 0; }}
     .explorer-controls label {{ display:grid; gap:5px; color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; }}
-    .explorer-controls select, .explorer-controls input, .explorer-controls button {{ min-height:34px; padding:6px 8px; border:1px solid var(--line); border-radius:5px; background:#fff; font:inherit; }}
+    .explorer-controls select, .explorer-controls input, .explorer-controls button {{ min-height:36px; padding:7px 9px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font:inherit; }}
     .explorer-controls button {{ cursor:pointer; font-weight:800; }}
     .explorer-table-wrap {{ overflow:auto; }}
-    table {{ width:100%; border-collapse:collapse; font-size:12px; min-width:900px; }}
+    table {{ width:100%; border-collapse:collapse; font-size:12px; }}
+    .explorer-table-wrap table {{ min-width:900px; }}
+    .contract {{ min-width:560px; }}
     th, td {{ padding:8px 7px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }}
     th:first-child, td:first-child {{ text-align:left; }}
     .explorer-footer {{ display:flex; justify-content:space-between; gap:12px; margin-top:12px; color:var(--muted); font-size:12px; }}
-    @media (max-width:760px) {{ main {{ width:min(100vw - 20px,1380px); }} header, .grid {{ display:block; }} nav {{ margin-top:12px; }} .panel {{ overflow:hidden; }} }}
+    @media (max-width:900px) {{ .grid {{ grid-template-columns:1fr; }} }}
+    @media (max-width:760px) {{ main {{ width:min(100vw - 16px,1440px); padding-top:4px; }} header {{ align-items:stretch; flex-direction:column; gap:8px; }} nav {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }} nav a {{ min-width:0; padding-inline:5px; text-align:center; }} .topbar-actions {{ width:100%; justify-content:space-between; margin-left:0; }} .panel {{ overflow-x:auto; }} .hero {{ padding:16px; }} }}
   </style>
 </head>
 <body><main>
@@ -92,10 +95,15 @@ def _shell(title: str, body: str, api_base: str) -> str:
   }};
   Object.assign(dictionary.tr, {{ sourceLimitsTitle:'3. Veri kaynağı ve sınırlar', currentSource:'Mevcut kaynak:', sourceLimitsCopy:'Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.', inputContractTitle:'4. Girdi veri sözleşmesi', outputContractTitle:'5. Model çıktı sözleşmesi', apiContractTitle:'6. API sözleşmesi', columnHeader:'Kolon', meaningHeader:'Anlam', contractInputDescription:'FastF1 veya sentetik telemetri girdisi', contractOutputDescription:'Enerji modeli tarafından üretilen karar ve telemetri alanı', apiContractCopy:'Oturum, KPI, canlı karar ve grafik serileri API uç noktalarından döndürülür.', openApiDocs:'API OpenAPI dokümantasyonunu aç' }});
   Object.assign(dictionary.en, {{ sourceLimitsTitle:'3. Data source and limits', currentSource:'Current source:', sourceLimitsCopy:'This prototype does not use private team vehicle parameters. Energy limits and thermal assumptions represent a generic hybrid race-car model.', inputContractTitle:'4. Input data contract', outputContractTitle:'5. Model output contract', apiContractTitle:'6. API contract', columnHeader:'Column', meaningHeader:'Meaning', contractInputDescription:'FastF1 or synthetic telemetry input', contractOutputDescription:'Decision and telemetry fields produced by the energy model', apiContractCopy:'Session context, KPIs, live decisions, and chart series are returned by API endpoints.', openApiDocs:'Open API documentation' }});
+  Object.assign(dictionary.tr, {{ guideTitle:'Kılavuz ve Veri Sözleşmesi', guideCopy:'Operasyon akışı, karar mantığı, model sınırları ve veri sözleşmeleri.', deployLogic:'Deploy: enerji değeri yüksek hızlanma bölgesinde güç kullan.', regenLogic:'Regen: frenleme enerjisini sonraki deploy fırsatı için geri kazan.', thermalLogic:'Termal koruma: batarya sıcaklık payını koru.', holdLogic:'Enerji koruma: potansiyel enerji açığında veya bitiş rezervi gerektiğinde mevcut haritayı koru.' }});
+  Object.assign(dictionary.en, {{ guideTitle:'Guide & Data Contract', guideCopy:'Operating workflow, decision logic, model limits, and data contracts.', deployLogic:'Deploy: use power where acceleration has the highest lap-time value.', regenLogic:'Regen: recover braking energy for the next deployment opportunity.', thermalLogic:'Thermal protection: preserve battery temperature headroom.', holdLogic:'Energy hold: protect the map when an energy deficit or finish reserve is expected.' }});
+  Object.assign(dictionary.tr, {{ searchPlaceholder:'Komut, segment veya değer ara', explorerStrategyHeader:'Strateji', explorerTimeHeader:'Zaman', explorerDistanceHeader:'Mesafe', explorerSegmentHeader:'Segment', explorerCommandHeader:'Komut', explorerBatteryHeader:'Batarya', explorerRiskHeader:'Risk', explorerStatusHeader:'Durum' }});
+  Object.assign(dictionary.en, {{ rawDataTitle:'Inspect Raw Telemetry', rawDataHeading:'Telemetry Data Explorer', searchPlaceholder:'Search command, segment, or value', explorerStrategyHeader:'Strategy', explorerTimeHeader:'Time', explorerDistanceHeader:'Distance', explorerSegmentHeader:'Segment', explorerCommandHeader:'Command', explorerBatteryHeader:'Battery', explorerRiskHeader:'Risk', explorerStatusHeader:'Status' }});
   const setLanguage = language => {{
     document.documentElement.lang = language;
     localStorage.setItem('reo-language', language);
     document.querySelectorAll('[data-i18n]').forEach(node => {{ if (dictionary[language][node.dataset.i18n]) node.textContent = dictionary[language][node.dataset.i18n]; }});
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(node => {{ if (dictionary[language][node.dataset.i18nPlaceholder]) node.placeholder = dictionary[language][node.dataset.i18nPlaceholder]; }});
     document.querySelectorAll('[data-i18n-tr]').forEach(node => {{ node.textContent = language === 'en' ? node.dataset.i18nEn : node.dataset.i18nTr; }});
     document.getElementById('lang-tr').classList.toggle('active', language === 'tr');
     document.getElementById('lang-en').classList.toggle('active', language === 'en');
@@ -138,13 +146,11 @@ def _guide_html(lap_data: LapData, config: EnergyConfig, api_base: str) -> str:
     model_rows = "".join(f"<tr><td><code>{escape(column)}</code></td><td data-i18n=\"contractOutputDescription\">Enerji modeli tarafından üretilen karar ve telemetri alanı</td></tr>" for column in MODEL_COLUMNS)
     notes = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
     body = f"""
-      <section class="hero"><h1 data-i18n="guideTitle">Kılavuz ve Veri Sözleşmesi</h1><p data-i18n="guideCopy">Nasıl kullanılır / Model varsayımları / Veri sözleşmesi</p></section>
+      <section class="hero"><h1 data-i18n="guideTitle">Kılavuz ve Veri Sözleşmesi</h1><p data-i18n="guideCopy">Operasyon akışı, karar mantığı, model sınırları ve veri sözleşmeleri.</p></section>
       <div class="grid">
         <section class="panel"><h2 data-i18n="howToTitle">1. Nasıl kullanılır?</h2><ol><li data-i18n="howTo1">Önce Dashboard sayfasından yıl, pist, oturum ve sürücüyü seç.</li><li data-i18n="howTo2">Canlı karar konsolunda komut, gerekçe, SoC, sıcaklık ve clipping riskini izle.</li><li data-i18n="howTo3">Grafikteki kırmızı imleç aracın tur içindeki mevcut konumunu gösterir.</li><li data-i18n="howTo4">Ham kayıtları karşılaştırmak için Telemetry sayfasına geç.</li></ol></section>
-        <section class="panel"><h2 data-i18n="logicTitle">2. Karar mantığı</h2><p data-i18n="logicCopy">Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.</p><ul><li><b>Deploy:</b> enerji değeri yüksek hızlanma bölgesinde güç kullan.</li><li><b>Regen:</b> frenleme enerjisini sonraki deploy fırsatı için geri kazan.</li><li><b>Thermal protect:</b> batarya sıcaklık payını koru.</li><li><b>Energy hold:</b> potansiyel enerji açığı veya bitiş rezervi nedeniyle mevcut haritayı koru.</li></ul></section>
+        <section class="panel"><h2 data-i18n="logicTitle">2. Karar mantığı</h2><p data-i18n="logicCopy">Sistem her örnekte deploy, regen veya enerji koruma kararı üretir.</p><ul><li data-i18n="deployLogic">Deploy: enerji değeri yüksek hızlanma bölgesinde güç kullan.</li><li data-i18n="regenLogic">Regen: frenleme enerjisini sonraki deploy fırsatı için geri kazan.</li><li data-i18n="thermalLogic">Termal koruma: batarya sıcaklık payını koru.</li><li data-i18n="holdLogic">Enerji koruma: potansiyel enerji açığında veya bitiş rezervi gerektiğinde mevcut haritayı koru.</li></ul></section>
       </div>
-      <section class="panel"><h2 data-i18n="mainQuestion">Bu panel neyi cevaplıyor?</h2><p data-i18n="mainAnswer">Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?</p><div class="grid"><div><b data-i18n="stepObserve">1. Veriyi oku</b><p data-i18n="stepObserveCopy">Pist segmenti, hız, SoC ve batarya sıcaklığını izler.</p></div><div><b data-i18n="stepPredict">2. İleriyi tahmin et</b><p data-i18n="stepPredictCopy">Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.</p></div><div><b data-i18n="stepDecide">3. Karar ver</b><p data-i18n="stepDecideCopy">Deploy, regen veya enerji koruma komutunu üretir.</p></div></div></section>
-      <section class="panel"><h2 data-i18n="readingGuide">Nasıl okunmalı?</h2><p data-i18n="readingGuideCopy">Önce KPI ve canlı konsola bak. Sonra grafik, karar akışı ve karşılaştırma tablosuyla kararın nedenini incele.</p></section>
       <section class="panel"><h2 data-i18n="sourceLimitsTitle">3. Veri kaynağı ve sınırlar</h2><p><b data-i18n="currentSource">Mevcut kaynak:</b> {escape(lap_data.source)}. {escape(lap_data.source_detail)}</p><p data-i18n="sourceLimitsCopy">Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.</p><p data-i18n-tr="Senaryo: ortam {config.ambient_temp_c:.1f}C, başlangıç SoC {config.initial_soc_mj:.2f} MJ, başlangıç batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s." data-i18n-en="Scenario: ambient {config.ambient_temp_c:.1f}C, initial SoC {config.initial_soc_mj:.2f} MJ, initial battery {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.">Senaryo: ortam {config.ambient_temp_c:.1f}C, başlangıç SoC {config.initial_soc_mj:.2f} MJ, başlangıç batarya {config.initial_battery_temp_c:.1f}C, lookahead {config.horizon_s:.1f}s.</p><ul>{notes}</ul></section>
       <section class="panel"><h2 data-i18n="inputContractTitle">4. Girdi veri sözleşmesi</h2><table class="contract"><thead><tr><th data-i18n="columnHeader">Kolon</th><th data-i18n="meaningHeader">Anlam</th></tr></thead><tbody>{input_rows}</tbody></table></section>
       <section class="panel"><h2 data-i18n="outputContractTitle">5. Model çıktı sözleşmesi</h2><table class="contract"><thead><tr><th data-i18n="columnHeader">Kolon</th><th data-i18n="meaningHeader">Anlam</th></tr></thead><tbody>{model_rows}</tbody></table></section>

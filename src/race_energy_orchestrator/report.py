@@ -33,7 +33,7 @@ def render_report(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     fig = _build_strategy_figure(fixed_trace, predictive_trace, config)
-    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True}, div_id="reo-telemetry-plot")
+    plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True, "displayModeBar": False}, div_id="reo-telemetry-plot")
     live_feed = build_live_decision_feed(predictive_trace, config)
     selection_query = "?" + urlencode({"year": year, "event": event, "session_name": session_name, "driver": driver})
     notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
@@ -62,7 +62,7 @@ def render_report(
       --amber: #bf7a00;
       --blue: #245f9f;
       --green: #2f7d4f;
-      --shadow: 0 18px 44px rgba(24, 29, 35, 0.10);
+      --shadow: 0 6px 18px rgba(24, 29, 35, 0.08);
     }}
     [data-theme="dark"] {{
       --bg: #0d1116;
@@ -71,31 +71,24 @@ def render_report(
       --ink: #eef3f7;
       --muted: #aab6c1;
       --line: #303b47;
-      --shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+      --shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
     }}
     * {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       color: var(--ink);
-      background:
-        linear-gradient(135deg, rgba(181, 18, 27, 0.08), transparent 26rem),
-        radial-gradient(circle at 80% 0%, rgba(0, 122, 122, 0.13), transparent 21rem),
-        repeating-linear-gradient(90deg, rgba(20, 23, 28, 0.025) 0 1px, transparent 1px 84px),
-        var(--bg);
+      background: var(--bg);
       font-family: "Avenir Next", "SF Pro Display", "Segoe UI", sans-serif;
       letter-spacing: 0;
       overflow-x: hidden;
     }}
     main {{
-      width: min(1440px, calc(100vw - 32px));
+      width: min(1560px, calc(100vw - 32px));
       margin: 0 auto;
       padding: 26px 0 44px;
     }}
     .shell {{
-      display: grid;
-      grid-template-columns: 260px minmax(0, 1fr);
-      gap: 18px;
-      align-items: start;
+      display: block;
       min-width: 0;
     }}
     aside {{
@@ -153,6 +146,11 @@ def render_report(
       justify-content: space-between;
       gap: 16px;
       margin-bottom: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 10px 0;
+      background: var(--bg);
     }}
     .topbar-label {{ color: var(--muted); font-size: 13px; font-weight: 700; }}
     .page-nav {{ display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }}
@@ -163,8 +161,15 @@ def render_report(
     .language-switch button.active {{ background: var(--surface-strong); color: white; }}
     .theme-toggle {{ min-width: 36px; min-height: 32px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-weight: 800; }}
     .topbar-actions {{ display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }}
+    .api-indicator {{ display:inline-flex; align-items:center; gap:7px; min-height:32px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:11px; font-weight:850; letter-spacing:.04em; white-space:nowrap; }}
+    .api-indicator-dot {{ width:8px; height:8px; border-radius:50%; background:#bf7a00; box-shadow:0 0 0 3px rgba(191,122,0,.16); }}
+    .api-indicator.live {{ color:#197044; border-color:#4ba879; }}
+    .api-indicator.live .api-indicator-dot {{ background:#2f9b63; box-shadow:0 0 0 3px rgba(47,155,99,.18); }}
+    .api-indicator.offline, .api-indicator.future {{ color:#b5121b; border-color:#d26b72; }}
+    .api-indicator.offline .api-indicator-dot, .api-indicator.future .api-indicator-dot {{ background:#d33b46; box-shadow:0 0 0 3px rgba(211,59,70,.18); }}
     [data-theme="dark"] .panel, [data-theme="dark"] .hero-main, [data-theme="dark"] .hero-metrics, [data-theme="dark"] .metric, [data-theme="dark"] .insight, [data-theme="dark"] .command, [data-theme="dark"] details {{ background: var(--surface); color: var(--ink); }}
     [data-theme="dark"] .panel table th, [data-theme="dark"] .panel table td {{ border-color: var(--line); }}
+    [data-theme="dark"] .panel table th {{ background:#202a34; color:var(--ink); }}
     [data-theme="dark"] .contract th {{ background:#202a34; color:var(--ink); }}
     [data-theme="dark"] .contract td code {{ background:#27333e; color:#eef3f7; border:1px solid #425261; }}
     #reo-page-loading {{ position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:var(--bg); color:var(--ink); opacity:0; pointer-events:none; transition:opacity .16s ease; }}
@@ -181,12 +186,19 @@ def render_report(
     .resource-links a {{ display: grid; gap: 5px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); text-decoration: none; box-shadow: var(--shadow); }}
     .resource-links a:hover {{ border-color: var(--red); }}
     .resource-links span {{ color: var(--muted); font-size: 12px; line-height: 1.4; }}
-    .session-context {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }}
-    .session-context > div {{ min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }}
+    .session-context {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; overflow:hidden; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow); }}
+    .session-context > div {{ min-width: 0; padding: 12px 14px; border-right:1px solid var(--line); }}
+    .session-context > div:last-child {{ border-right:0; }}
     .session-context span {{ display: block; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }}
     .session-context b {{ display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 14px; }}
     .panel-note {{ margin: -7px 0 12px; color: var(--muted); font-size: 12px; }}
-    .selection-bar {{ display: grid; grid-template-columns: 1fr 1.8fr 1fr 1fr auto; gap: 9px; align-items: end; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }}
+    .session-controls {{ border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow); overflow:hidden; }}
+    .session-controls > summary {{ display:flex; align-items:center; gap:10px; min-height:44px; padding:10px 14px; cursor:pointer; list-style:none; font-size:13px; font-weight:800; }}
+    .session-controls > summary::-webkit-details-marker {{ display:none; }}
+    .session-controls > summary::after {{ content:'+'; margin-left:auto; color:var(--muted); font-size:18px; font-weight:500; }}
+    .session-controls[open] > summary::after {{ content:'−'; }}
+    .session-controls > summary small {{ color:var(--muted); font-size:11px; font-weight:600; }}
+    .selection-bar {{ display: grid; grid-template-columns: .7fr 1.7fr 1fr 1fr auto; gap: 9px; align-items: end; padding: 12px 14px 14px; border-top:1px solid var(--line); }}
     .selection-bar label {{ display: grid; gap: 5px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }}
     .selection-bar select {{ width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font: inherit; }}
     .selection-bar button {{ min-height: 36px; padding: 7px 12px; border: 0; border-radius: 5px; background: var(--red); color: #fff; cursor: pointer; font: inherit; font-weight: 800; }}
@@ -194,6 +206,8 @@ def render_report(
       display: grid;
       gap: 16px;
       padding: 20px;
+      min-width: 0;
+      overflow: hidden;
       border: 1px solid #303a45;
       border-radius: 8px;
       background: #171a1f;
@@ -211,6 +225,7 @@ def render_report(
     .live-command.critical {{ border-left-color: var(--red); }}
     .live-command small {{ display: block; color: #b8c0c8; font-weight: 800; text-transform: uppercase; }}
     .live-command b {{ display: block; margin: 12px 0 8px; font-size: clamp(26px, 4vw, 44px); line-height: 1; }}
+    .live-command b, .live-command p {{ overflow-wrap: anywhere; }}
     .live-command p {{ max-width: 700px; color: #edf2f6; font-size: 15px; }}
     .live-kpis {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
     .live-kpi {{ padding: 13px; border: 1px solid #3a434d; border-radius: 6px; background: #20252c; }}
@@ -295,7 +310,7 @@ def render_report(
     }}
     .hero-metrics {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
       min-width: 0;
     }}
@@ -318,7 +333,7 @@ def render_report(
     .data-status {{ margin: 12px 0; padding: 12px 14px; border: 1px solid #c58a28; border-left: 4px solid #c58a28; border-radius: 7px; background: #fff8e7; color: #68470d; font-size: 13px; }}
     [data-theme="dark"] .data-status {{ background: #332a18; color: #f4d38a; border-color: #bd8421; }}
     .metric {{
-      min-height: 124px;
+      min-height: 112px;
       padding: 16px;
       border-radius: 8px;
       background: var(--surface);
@@ -419,11 +434,12 @@ def render_report(
     .explorer-pages button:disabled {{ cursor: default; opacity: 0.45; }}
     .grid {{
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
       gap: 16px;
       align-items: start;
       min-width: 0;
     }}
+    .analysis-grid {{ grid-template-columns:minmax(0,1fr); }}
+    .detail-grid {{ grid-template-columns:minmax(0,1.4fr) minmax(320px,.6fr); }}
     .panel {{
       padding: 18px;
       min-width: 0;
@@ -435,10 +451,12 @@ def render_report(
     }}
     .plot-panel {{
       padding: 10px 10px 0;
+      overflow:hidden;
     }}
     .plot-panel h2 {{
       padding: 8px 8px 0;
     }}
+    .plot-panel .plotly-graph-div, .plot-panel .js-plotly-plot, .plot-panel .plot-container, .plot-panel .svg-container {{ width:100% !important; max-width:100% !important; }}
     .track {{
       display: flex;
       width: 100%;
@@ -475,6 +493,7 @@ def render_report(
       overflow: auto;
       padding-right: 4px;
     }}
+    .analysis-grid .command-list {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
     .command {{
       display: grid;
       grid-template-columns: 86px minmax(0, 1fr);
@@ -530,6 +549,9 @@ def render_report(
       background: #f4f6f5;
       font-weight: 750;
     }}
+    .table-scroll {{ width:100%; overflow-x:auto; overscroll-behavior-inline:contain; }}
+    #reo-metrics-table {{ min-width:1180px; }}
+    #reo-segment-table {{ min-width:560px; }}
     code {{
       background: #eef2f1;
       border-radius: 4px;
@@ -544,19 +566,32 @@ def render_report(
     @media (max-width: 1060px) {{
       .shell, .hero, .grid, .purpose, .live-decision {{ grid-template-columns: 1fr; }}
       aside {{ position: relative; min-height: auto; top: 0; }}
+      .topbar-label {{ display:none; }}
       .hero-main {{ min-height: 300px; }}
+      .hero-metrics {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
       .compact-hero {{ align-items: flex-start; flex-direction: column; }}
       .compact-hero-meta {{ justify-content: flex-start; text-align: left; }}
       .session-context {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .session-context > div {{ border-bottom:1px solid var(--line); }}
+      .session-context > div:nth-child(2n) {{ border-right:0; }}
+      .session-context > div:nth-last-child(-n+2) {{ border-bottom:0; }}
       .resource-links {{ grid-template-columns: 1fr; }}
       .selection-bar {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .live-stream {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .analysis-grid .command-list {{ grid-template-columns:1fr; }}
       .shell, .content, .hero, .grid, .panel {{ width: 100%; max-width: 100%; }}
     }}
     @media (max-width: 680px) {{
-      main {{ width: min(100vw - 20px, 1440px); padding-top: 10px; }}
+      main {{ width: min(100vw - 16px, 1560px); padding-top: 4px; }}
       .hero-metrics {{ grid-template-columns: 1fr; }}
       .topbar, .decision-flow {{ grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }}
+      .topbar {{ gap:8px; }}
+      .page-nav {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; overflow:visible; padding-bottom:2px; }}
+      .page-nav a {{ min-width:0; padding-inline:5px; text-align:center; }}
+      .topbar-actions {{ display:grid; grid-template-columns:auto auto 34px; width:100%; justify-content:space-between; margin-left:0; }}
+      .live-console-head {{ align-items:flex-start; flex-direction:column; }}
+      .live-badge {{ max-width:100%; overflow-wrap:anywhere; }}
+      .api-indicator {{ max-width:150px; overflow:hidden; text-overflow:ellipsis; }}
       .insight-grid {{ grid-template-columns: 1fr; }}
       .metric {{ min-height: 104px; }}
       .explorer-heading {{ align-items: start; flex-direction: column; }}
@@ -566,10 +601,15 @@ def render_report(
       .hero-main {{ min-height: 260px; padding: 26px 18px; }}
       .compact-hero h1 {{ font-size: 20px; }}
       .session-context {{ grid-template-columns: 1fr; }}
+      .session-context > div {{ border-right:0; border-bottom:1px solid var(--line); }}
+      .session-context > div:last-child {{ border-bottom:0; }}
       .selection-bar {{ grid-template-columns: 1fr; }}
+      .session-controls > summary {{ align-items:flex-start; flex-direction:column; padding-right:42px; position:relative; }}
+      .session-controls > summary::after {{ position:absolute; right:14px; top:9px; }}
       h1 {{ max-width: min(320px, calc(100vw - 76px)); font-size: 34px; line-height: 1.02; }}
       .hero-main p, aside p {{ max-width: min(280px, calc(100vw - 96px)); font-size: 14px; }}
       .panel {{ overflow-x: auto; }}
+      .live-kpis, .live-stream {{ grid-template-columns:1fr; }}
     }}
   </style>
 </head>
@@ -577,33 +617,20 @@ def render_report(
   <div id="reo-page-loading" aria-live="polite" aria-busy="true"><div class="page-loading-card"><span class="page-loading-spinner" aria-hidden="true"></span><b data-i18n="loadingData">Veri yükleniyor</b><small data-i18n="loadingDataCopy">Seçilen oturum ve pist analizi hazırlanıyor.</small></div></div>
 <main>
   <div class="topbar">
-    <span class="topbar-label" data-i18n="panelPurpose">Race Energy Orchestrator / Energy decision cockpit</span>
+    <span class="topbar-label" data-i18n="panelPurpose">Race Energy Orchestrator / Energy Decision Cockpit</span>
     <nav class="page-nav" aria-label="Dashboard pages"><a class="active" href="index.html{selection_query}" data-i18n="navDashboard">Dashboard</a><a href="explorer.html{selection_query}" data-i18n="navTelemetry">Telemetry</a><a href="guide.html{selection_query}" data-i18n="navGuide">Guide</a></nav>
-    <div class="topbar-actions"><div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div><button class="theme-toggle" id="reo-theme-toggle" type="button" aria-label="Toggle dark mode">◐</button></div>
+    <div class="topbar-actions"><span class="api-indicator checking" id="reo-api-indicator"><i class="api-indicator-dot" aria-hidden="true"></i><span id="reo-api-indicator-text" data-i18n="apiChecking">Kontrol ediliyor</span></span><div class="language-switch" aria-label="Language"><button id="lang-tr" class="active" type="button">TR</button><button id="lang-en" type="button">EN</button></div><button class="theme-toggle" id="reo-theme-toggle" type="button" aria-label="Toggle dark mode">◐</button></div>
   </div>
   <div class="shell">
-    <aside>
-      <div class="brand">
-        <div class="mark">REO</div>
-        <b>Race Energy Orchestrator</b>
-        <span>Predictive race energy control</span>
-      </div>
-      {_side_summary(lap_data, metrics, predictive_trace)}
-      <div class="side-block">
-        <span class="side-label" data-i18n="sourceLabel">Veri kaynağı</span>
-        <span class="side-value" id="reo-side-source">{escape(lap_data.source)}</span>
-        <p id="reo-source-detail">{escape(lap_data.source_detail)}</p>
-      </div>
-    </aside>
     <section class="content">
       <div class="compact-hero">
         <div>
-          <span class="eyebrow" data-i18n="productName">REO · Race Energy Orchestrator</span>
-          <h1 data-i18n="heroTitle">Enerji karar kokpiti</h1>
+          <h1 data-i18n="heroTitle">Enerji Karar Kokpiti</h1>
           <p data-i18n="heroCopy">Sabit harita ve predictive orchestration karşılaştırması.</p>
         </div>
         <div class="compact-hero-meta">
           <span id="reo-compact-session">{escape(event)} · {escape(session_name)} · {escape(driver)}</span>
+          <span id="reo-side-source">{escape(lap_data.source)}</span>
           <span data-i18n="compactStatus">Operational view</span>
         </div>
       </div>
@@ -613,17 +640,19 @@ def render_report(
         <div><span data-i18n="eventLabel">Yarış / Event</span><b id="reo-event-label">{escape(str(year))} {escape(event)}</b></div>
         <div><span data-i18n="sessionLabel">Session</span><b id="reo-session-label">{escape(session_name)}</b></div>
         <div><span data-i18n="driverLabel">Driver</span><b id="reo-driver-label">{escape(driver)}</b></div>
-        <div><span data-i18n="apiLabel">API durumu</span><b id="reo-api-state" data-i18n="apiChecking">Kontrol ediliyor</b></div>
       </section>
       <div id="reo-data-status" class="data-status" hidden></div>
 
-      <form class="selection-bar" id="reo-selection-form">
-        <label><span data-i18n="yearLabel">Yıl / Year</span><select id="reo-year-select"><option value="2026">2026</option></select></label>
-        <label><span data-i18n="eventSelectLabel">Yarış / Track</span><select id="reo-event-select">{event_options}</select></label>
-        <label><span data-i18n="sessionSelectLabel">Oturum</span><select id="reo-session-select"><option value="Q">Qualifying</option><option value="R">Race</option><option value="FP1">FP1</option><option value="FP2">FP2</option><option value="FP3">FP3</option></select></label>
-        <label><span data-i18n="driverSelectLabel">Sürücü</span><select id="reo-driver-select"><option value="LEC">LEC</option><option value="VER">VER</option><option value="NOR">NOR</option><option value="HAM">HAM</option></select></label>
-        <button type="submit" data-i18n="loadData">Veriyi yükle</button>
-      </form>
+      <details class="session-controls" open>
+        <summary><span data-i18n="sessionSetup">Oturum Ayarları</span><small data-i18n="sessionSetupCopy">Pist, oturum ve sürücü seçimi</small></summary>
+        <form class="selection-bar" id="reo-selection-form">
+          <label><span data-i18n="yearLabel">Yıl</span><select id="reo-year-select"><option value="2026">2026</option></select></label>
+          <label><span data-i18n="eventSelectLabel">Yarış / Pist</span><select id="reo-event-select">{event_options}</select></label>
+          <label><span data-i18n="sessionSelectLabel">Oturum</span><select id="reo-session-select"><option value="Q">Qualifying</option><option value="R">Race</option><option value="FP1">FP1</option><option value="FP2">FP2</option><option value="FP3">FP3</option></select></label>
+          <label><span data-i18n="driverSelectLabel">Sürücü</span><select id="reo-driver-select"><option value="LEC">LEC</option><option value="VER">VER</option><option value="NOR">NOR</option><option value="HAM">HAM</option></select></label>
+          <button type="submit" data-i18n="loadData">Veriyi Yükle</button>
+        </form>
+      </details>
       <script>
         (() => {{
           const query = new URLSearchParams(window.location.search);
@@ -663,12 +692,23 @@ def render_report(
           window.reoApiBase = apiBase;
           const getSelectedQuery = () => window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
           const setText = (id, value) => {{ const node = document.getElementById(id); if (node) node.textContent = value; }};
+          const setApiIndicator = state => {{
+            const indicator = document.getElementById('reo-api-indicator');
+            const labels = document.documentElement.lang === 'en'
+              ? {{ checking: 'CHECKING', live: 'CONNECTED', offline: 'OFFLINE', future: 'NO RACE DATA' }}
+              : {{ checking: 'KONTROL EDİLİYOR', live: 'BAĞLI', offline: 'ÇEVRİMDIŞI', future: 'YARIŞ VERİSİ YOK' }};
+            const visualState = state === 'embedded' ? 'offline' : state;
+            window.reoApiState = state;
+            if (indicator) indicator.className = `api-indicator ${{visualState}}`;
+            setText('reo-api-indicator-text', labels[visualState] || labels.checking);
+          }};
           const setDataAvailability = (state, message = '') => {{
             const status = document.getElementById('reo-data-status');
             const live = state === 'live';
             const future = state === 'future';
             if (status) {{ status.hidden = live; status.textContent = message; }}
             document.querySelectorAll('.data-dependent').forEach(node => {{ node.hidden = future; }});
+            setApiIndicator(state);
             if (live) setText('reo-api-state', 'LIVE');
           }};
           const syncDashboardContext = async () => {{
@@ -720,6 +760,7 @@ def render_report(
           syncDashboardContext();
           window.setInterval(syncDashboardContext, 3000);
           window.reoSyncDashboardContext = syncDashboardContext;
+          window.addEventListener('reo-language-change', () => setApiIndicator(window.reoApiState || 'checking'));
         }})();
       </script>
 
@@ -728,7 +769,7 @@ def render_report(
         {_track_ribbon(base_frame)}
       </div>
 
-      <div class="grid">
+      <div class="grid analysis-grid">
         <div class="panel plot-panel data-dependent">
           <h2 data-i18n="telemetryTitle">Strateji grafiği / Oturum snapshot'ı</h2>
           <p class="panel-note" data-i18n="telemetryNote">Grafik, API oturumundan üretilen karşılaştırma snapshot'ıdır. Canlı karar ve KPI değerleri API'den güncellenir.</p>
@@ -896,7 +937,7 @@ def render_report(
         </div>
       </div>
 
-      <div class="grid">
+      <div class="grid detail-grid">
         <div class="panel data-dependent">
           <h2 data-i18n="comparisonTitle">Sabit harita / Orchestrator</h2>
           {_format_metrics(metrics)}
@@ -914,8 +955,6 @@ def render_report(
 
       {_scenario_comparison_panel(scenario_comparison)}
 
-      {_support_links(selection_query)}
-
     </section>
   </div>
 </main>
@@ -925,8 +964,9 @@ def render_report(
       tr: {{ navDashboard: "Dashboard", navTelemetry: "Telemetry", navGuide: "Guide", sourceLabel: "Veri kaynağı", yearLabel: "Yıl / Year", eventSelectLabel: "Yarış / Track", loadData: "Veriyi yükle", panelPurpose: "Race Energy Orchestrator / Enerji karar paneli", productName: "Race Energy Orchestrator", heroTitle: "Enerji kararlarını daha hızlı tur için yönet.", heroCopy: "Sistem, sabit enerji haritasını öngörülü orkestrasyonla karşılaştırır ve aracın enerjiyi nerede kullanacağına karar verir.", apiChecking: "Kontrol ediliyor", mainQuestion: "Bu panel neyi cevaplıyor?", mainAnswer: "Sınırlı hibrit enerjiyi tur boyunca ne zaman deploy, ne zaman regen ve ne zaman koruma modunda kullanmak gerekir?", stepObserve: "1. Veriyi oku", stepObserveCopy: "Pist segmenti, hız, SoC ve batarya sıcaklığını izler.", stepPredict: "2. İleriyi tahmin et", stepPredictCopy: "Uzun düzlük ve fren bölgelerini lookahead ile değerlendirir.", stepDecide: "3. Karar ver", stepDecideCopy: "Deploy, regen veya enerji koruma komutunu üretir.", readingGuide: "Nasıl okunmalı?", readingGuideCopy: "Önce üstteki sonuçlara bak. Orchestrator satırı sabit haritadan daha iyi ise strateji avantaj sağlıyor. Sonra karar akışı ve telemetriyi açarak nedenini incele.", insightTitle: "Ana sonuç", trackTitle: "Pistte enerji planı", telemetryTitle: "Strateji grafiği / Oturum özeti", telemetryNote: "Grafik, API oturumundan üretilen karşılaştırma özetidir. Canlı karar ve KPI değerleri API'den güncellenir.", trackLabel: "Pist", eventLabel: "Yarış", sessionLabel: "Oturum", driverLabel: "Sürücü", apiLabel: "API durumu", commandsTitle: "Sistemin verdiği kararlar", comparisonTitle: "Sabit harita / Orchestrator", segmentTitle: "Pist segmentleri", assumptionsTitle: "Model varsayımları ve veri sözleşmesi", scenarioTitle: "Senaryo doğrulaması", rawDataTitle: "Ham telemetriyi incele", rawDataHeading: "Telemetri veri gezgini", rawDataCopy: "Ham karar akışının tamamı bu panelde. Dosya açmadan strateji, risk ve komut bazında incele.", strategyFilter: "Strateji", allOption: "Tümü", fixedOption: "Sabit harita", searchFilter: "Arama", incidentFilter: "Clipping / termal limit", clearFilters: "Filtreleri temizle" }},
       en: {{ navDashboard: "Dashboard", navTelemetry: "Telemetry", navGuide: "Guide", sourceLabel: "Data source", yearLabel: "Year", eventSelectLabel: "Event / Track", loadData: "Load data", panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", productName: "Race Energy Orchestrator", heroTitle: "Manage energy decisions for a faster lap.", heroCopy: "The system compares a fixed energy map with predictive orchestration and decides where the car should use its energy.", apiChecking: "Checking", mainQuestion: "What question does this panel answer?", mainAnswer: "Across the lap, when should limited hybrid energy be deployed, regenerated, or protected?", stepObserve: "1. Read the data", stepObserveCopy: "Track segment, speed, SoC, and battery temperature are monitored.", stepPredict: "2. Look ahead", stepPredictCopy: "Long straights and braking zones are evaluated ahead of the car.", stepDecide: "3. Make the decision", stepDecideCopy: "The system produces deploy, regen, or energy-save commands.", readingGuide: "How should I read it?", readingGuideCopy: "Start with the results above. If the Orchestrator row beats the fixed map, the strategy has an advantage. Open the decision flow and telemetry to understand why.", insightTitle: "Key result", trackTitle: "Energy plan on track", telemetryTitle: "Strategy telemetry / Session snapshot", telemetryNote: "This chart is a comparison snapshot generated from the API session. Live decisions and KPI values are API-backed.", trackLabel: "Track", eventLabel: "Event", sessionLabel: "Session", driverLabel: "Driver", apiLabel: "API status", commandsTitle: "System decisions", comparisonTitle: "Fixed map / Orchestrator", segmentTitle: "Track segments", assumptionsTitle: "Model assumptions and data contract", scenarioTitle: "Scenario validation", rawDataTitle: "Inspect raw telemetry", rawDataHeading: "Telemetry data explorer", rawDataCopy: "The full decision stream lives here. Explore strategy, risk, and commands without opening a file.", strategyFilter: "Strategy", allOption: "All", fixedOption: "Fixed map", searchFilter: "Search", incidentFilter: "Clipping / thermal limit", clearFilters: "Clear filters" }}
     }};
-    Object.assign(dictionary.tr, {{ panelPurpose: "Race Energy Orchestrator / Enerji karar kokpiti", heroTitle: "Enerji karar kokpiti", heroCopy: "Sabit harita ve predictive orchestration karşılaştırması.", compactStatus: "Operasyon görünümü" }});
-    Object.assign(dictionary.en, {{ panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", heroTitle: "Energy decision cockpit", heroCopy: "Fixed-map and predictive orchestration comparison.", compactStatus: "Operational view" }});
+    Object.assign(dictionary.tr, {{ panelPurpose: "Race Energy Orchestrator / Enerji Karar Kokpiti", heroTitle: "Enerji Karar Kokpiti", heroCopy: "Sabit harita ve öngörülü enerji orkestrasyonu karşılaştırması.", compactStatus: "Operasyon Görünümü", sessionSetup: "Oturum Ayarları", sessionSetupCopy: "Pist, oturum ve sürücü seçimi" }});
+    Object.assign(dictionary.tr, {{ yearLabel: "Yıl", eventSelectLabel: "Yarış / Pist" }});
+    Object.assign(dictionary.en, {{ panelPurpose: "Race Energy Orchestrator / Energy Decision Cockpit", heroTitle: "Energy Decision Cockpit", heroCopy: "Fixed-map and predictive energy orchestration comparison.", compactStatus: "Operational View", sessionSetup: "Session Setup", sessionSetupCopy: "Track, session, and driver selection", insightTitle: "Key Results", trackTitle: "Energy Plan on Track", telemetryTitle: "Strategy Telemetry / Session Overview", commandsTitle: "System Decisions", comparisonTitle: "Fixed Map / Orchestrator", segmentTitle: "Track Segments", scenarioTitle: "Scenario Validation", rawDataHeading: "Telemetry Data Explorer" }});
     Object.assign(dictionary.tr, {{ lapImprovement: "Tur süresi iyileşmesi", vsFixed: "Sabit haritaya göre", clippingReduction: "Clipping azalması", orchestratorStrategy: "Orchestrator stratejisi", regenEvents: "Regen olayları", regenPoints: "Regen karar noktası", previous: "Önceki", next: "Sonraki", orchestrationGain: "Orkestrasyon kazancı", lapGainCopy: "Sabit haritaya karşı tur süresi iyileşmesi.", clippingControl: "Clipping kontrolü", energyUse: "Deploy yoğunluğu", decisionMode: "Karar modu", dominantCommand: "Tur örneklerinin baskın komutu.", sideLap: "Tur süresi kazancı", sideClipping: "Orchestrator clipping", sideRisk: "Potansiyel clipping riski", thermalHeadroom: "Termal pay", thermalHeadroomCopy: "Yumuşak limite göre kalan batarya sıcaklık alanı.", controlScore: "Kontrol skoru", controlScoreCopy: "Clipping ve termal limit sürelerinden türetilen karar kalitesi.", lookahead: "Lookahead", lookaheadCopy: "Yaklaşan uzun düzlükler için enerji rezerv ufku.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performansı, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.", scenarioName: "Senaryo", scenarioAmbient: "Ortam", scenarioLapGain: "Tur kazancı", scenarioClipping: "Clipping azalması", scenarioThermal: "Termal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Durum", tableStrategy: "Strateji", tableLapProxy: "Tur proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping zaman etkisi (proxy s)", tableThermal: "Termal limit (s)", tableSpeedLoss: "Maksimum hız kaybı", tableEndSoc: "Final SoC", tableUnused: "Kalan enerji", tableMaxTemp: "Maks. batarya sıcaklığı", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy yoğunluğu %", tableScore: "Kontrol skoru", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Mesafe", durationHeader: "Süre", avgSpeedHeader: "Ort. hız" }});
     Object.assign(dictionary.en, {{ lapImprovement: "Lap time improvement", vsFixed: "Compared with fixed map", clippingReduction: "Clipping reduction", orchestratorStrategy: "Orchestrator strategy", regenEvents: "Regen events", regenPoints: "Regen decision points", previous: "Previous", next: "Next", orchestrationGain: "Orchestration gain", lapGainCopy: "Lap time improvement versus the fixed map.", clippingControl: "Clipping control", energyUse: "Deploy intensity", decisionMode: "Decision mode", dominantCommand: "Dominant command across lap samples.", sideLap: "Lap time gain", sideClipping: "Orchestrator clipping", sideRisk: "Potential clipping risk", thermalHeadroom: "Thermal headroom", thermalHeadroomCopy: "Battery temperature margin to the soft limit.", controlScore: "Control score", controlScoreCopy: "Decision quality derived from clipping and thermal-limit time.", lookahead: "Lookahead", lookaheadCopy: "Energy reserve horizon for upcoming long straights.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performance compared across starting and thermal conditions on the same track model.", scenarioName: "Scenario", scenarioAmbient: "Ambient", scenarioLapGain: "Lap gain", scenarioClipping: "Clipping reduction", scenarioThermal: "Thermal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Status", tableStrategy: "Strategy", tableLapProxy: "Lap proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping time effect (proxy s)", tableThermal: "Thermal limit (s)", tableSpeedLoss: "Maximum speed loss", tableEndSoc: "Final SoC", tableUnused: "Unused energy", tableMaxTemp: "Max battery temperature", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy intensity %", tableScore: "Control score", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Distance", durationHeader: "Duration", avgSpeedHeader: "Avg. speed" }});
     Object.assign(dictionary.tr, {{ sessionSelectLabel: "Oturum", driverSelectLabel: "Sürücü", telemetrySupportCopy: "Ham karar kayıtlarını filtrele, karşılaştır ve incele.", guideSupportCopy: "Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.", explorerRows: "kayıt", explorerPage: "Sayfa", explorerNoResults: "Filtreye uyan kayıt yok.", explorerStrategyHeader: "Strateji", explorerTimeHeader: "Zaman", explorerDistanceHeader: "Mesafe", explorerSegmentHeader: "Segment", explorerCommandHeader: "Komut", explorerBatteryHeader: "Batarya", explorerRiskHeader: "Risk", explorerStatusHeader: "Durum", loadingData: "Veri yükleniyor", loadingDataCopy: "Seçilen oturum ve pist analizi hazırlanıyor." }});
@@ -973,35 +1013,36 @@ def _build_strategy_figure(
         rows=5,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.04,
+        vertical_spacing=0.065,
+        row_heights=[0.18, 0.24, 0.2, 0.18, 0.2],
         subplot_titles=(
-            "Hız ve aktif aero",
-            "Deploy / recharge",
-            "Energy Store SoC",
-            "Potansiyel clipping riski",
-            "Batarya sıcaklığı",
+            "Speed / Active Aero",
+            "Deploy / Regen",
+            "Energy Store (SoC)",
+            "Clipping Risk",
+            "Battery Temperature",
         ),
     )
 
     x = predictive_trace["distance_m"]
     aero_numeric = predictive_trace["aero_mode"].map({"Z_MODE": 0, "X_MODE": 1})
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Hız km/h", line=dict(color="#245f9f", width=2)), row=1, col=1)
-    fig.add_trace(go.Scatter(x=x, y=aero_numeric * 100, name="X_MODE x100", line=dict(color="#14171c", dash="dot")), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["speed_kmh"], name="Speed km/h", line=dict(color="#245f9f", width=2.2)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=aero_numeric * 100, name="X_MODE x100", line=dict(color="#bf7a00", width=1.4, dash="dot")), row=1, col=1)
 
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Sabit deploy", line=dict(color="#bf7a00")), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Orchestrator deploy", line=dict(color="#b5121b", width=2)), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=-fixed_trace["regen_kw"], name="Sabit recharge", line=dict(color="#d7a84c", dash="dot")), row=2, col=1)
-    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Orchestrator recharge", line=dict(color="#007a7a", dash="dot")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["deploy_kw"], name="Fixed Deploy", line=dict(color="#7d8792", width=1.4, dash="dash")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["deploy_kw"], name="Orchestrator Deploy", line=dict(color="#b5121b", width=2.4)), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=-fixed_trace["regen_kw"], name="Fixed Regen", line=dict(color="#a6afb7", width=1.3, dash="dot")), row=2, col=1)
+    fig.add_trace(go.Scatter(x=x, y=-predictive_trace["regen_kw"], name="Orchestrator Regen", line=dict(color="#007a7a", width=2, dash="dot")), row=2, col=1)
 
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["soc_mj"], name="Sabit SoC", line=dict(color="#8a5a00")), row=3, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Orchestrator SoC", line=dict(color="#b5121b", width=2)), row=3, col=1)
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["soc_mj"], name="Fixed SoC", line=dict(color="#7d8792", width=1.4, dash="dash")), row=3, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["soc_mj"], name="Orchestrator SoC", line=dict(color="#b5121b", width=2.4)), row=3, col=1)
     fig.add_hline(y=config.minimum_soc_mj, row=3, col=1, line=dict(color="#7f0c14", dash="dash"))
 
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["clipping_risk"], name="Sabit risk", line=dict(color="#e05260")), row=4, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Orchestrator risk", line=dict(color="#007a7a", width=2)), row=4, col=1)
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["clipping_risk"], name="Fixed Risk", line=dict(color="#7d8792", width=1.4, dash="dash")), row=4, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["clipping_risk"], name="Orchestrator Risk", line=dict(color="#007a7a", width=2.4)), row=4, col=1)
 
-    fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Sabit batarya C", line=dict(color="#bf7a00")), row=5, col=1)
-    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Orchestrator batarya C", line=dict(color="#2f7d4f", width=2)), row=5, col=1)
+    fig.add_trace(go.Scatter(x=x, y=fixed_trace["battery_temp_c"], name="Fixed Battery", line=dict(color="#7d8792", width=1.4, dash="dash")), row=5, col=1)
+    fig.add_trace(go.Scatter(x=x, y=predictive_trace["battery_temp_c"], name="Orchestrator Battery", line=dict(color="#2f7d4f", width=2.4)), row=5, col=1)
     fig.add_hline(y=config.battery_soft_limit_c, row=5, col=1, line=dict(color="#b5121b", dash="dash"))
     fig.add_shape(
         type="line",
@@ -1019,11 +1060,14 @@ def _build_strategy_figure(
     fig.update_yaxes(title_text="MJ", row=3, col=1)
     fig.update_yaxes(title_text="risk", row=4, col=1, range=[-0.05, 1.05])
     fig.update_yaxes(title_text="C", row=5, col=1)
-    fig.update_xaxes(title_text="Mesafe (m)", row=5, col=1)
+    fig.update_xaxes(title_text="Distance (m)", row=5, col=1)
+    fig.update_xaxes(showgrid=True, gridcolor="#e5e9ed", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor="#e5e9ed", zeroline=False)
+    fig.update_annotations(font=dict(size=13, color="#8f9aa6"), xanchor="left", x=0)
     fig.update_layout(
-        height=920,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        margin=dict(l=52, r=24, t=76, b=44),
+        height=1120,
+        legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="left", x=0, traceorder="normal"),
+        margin=dict(l=64, r=28, t=142, b=54),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="#fbfcfb",
         template="plotly_white",
@@ -1262,7 +1306,7 @@ def _data_explorer_panel(fixed_trace: pd.DataFrame, predictive_trace: pd.DataFra
             </select>
           </label>
           <label><span data-i18n="searchFilter">Arama</span>
-            <input id="reo-text-filter" type="search" placeholder="komut, segment veya değer ara">
+            <input id="reo-text-filter" type="search" placeholder="Komut, segment veya değer ara" data-i18n-placeholder="searchPlaceholder">
           </label>
           <label class="check-label"><input id="reo-clipping-filter" type="checkbox"> <span data-i18n="incidentFilter">Clipping / termal limit</span></label>
           <button id="reo-reset-filter" type="button" data-i18n="clearFilters">Filtreleri temizle</button>

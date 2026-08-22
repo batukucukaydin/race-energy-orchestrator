@@ -10,8 +10,8 @@
     [data-theme="dark"] { --bg:#0d1116; --surface:#151b22; --ink:#eef3f7; --muted:#aab6c1; --line:#303b47; --shadow:0 14px 34px rgba(0,0,0,.28); }
     * { box-sizing:border-box; }
     body { margin:0; color:var(--ink); background:var(--bg); font-family:"Avenir Next","Segoe UI",sans-serif; transition:background .18s ease,color .18s ease; }
-    main { width:min(1380px,calc(100vw - 32px)); margin:auto; padding:24px 0 48px; }
-    header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; min-height:40px; }
+    main { width:min(1440px,calc(100vw - 32px)); margin:auto; padding:12px 0 48px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:16px; min-height:48px; position:sticky; top:0; z-index:20; padding:8px 0; background:var(--bg); }
     header strong { font-size:15px; }
     nav { display:flex; flex-wrap:wrap; gap:6px; }
     nav a { padding:7px 10px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font-size:12px; font-weight:800; text-decoration:none; transition:border-color .18s ease,background .18s ease; }
@@ -22,9 +22,9 @@
     .language-switch button, .theme-toggle { min-height:30px; border:0; border-radius:5px; padding:5px 9px; background:transparent; color:var(--muted); cursor:pointer; font:inherit; font-size:12px; font-weight:800; }
     .language-switch button.active, .theme-toggle { background:var(--ink); color:var(--bg); }
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] button { color-scheme:dark; }
-    .hero { padding:22px; margin-bottom:16px; }
-    h1 { margin:0 0 7px; font-size:clamp(28px,4vw,48px); }
-    h2 { margin:0 0 10px; font-size:20px; }
+    .hero { padding:18px 20px; margin-bottom:16px; }
+    h1 { margin:0 0 7px; font-size:clamp(26px,3vw,36px); line-height:1.12; }
+    h2 { margin:0 0 10px; font-size:18px; }
     h3 { margin:0 0 7px; font-size:15px; }
     p, li { color:var(--muted); line-height:1.55; }
     .panel { padding:18px; margin-bottom:16px; }
@@ -41,14 +41,17 @@
     .advanced-section > summary { cursor:pointer; font-size:20px; font-weight:800; list-style:none; }
     .explorer-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin:15px 0; }
     .explorer-controls label { display:grid; gap:5px; color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; }
-    .explorer-controls select, .explorer-controls input, .explorer-controls button { min-height:34px; padding:6px 8px; border:1px solid var(--line); border-radius:5px; background:#fff; font:inherit; }
+    .explorer-controls select, .explorer-controls input, .explorer-controls button { min-height:36px; padding:7px 9px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font:inherit; }
     .explorer-controls button { cursor:pointer; font-weight:800; }
     .explorer-table-wrap { overflow:auto; }
-    table { width:100%; border-collapse:collapse; font-size:12px; min-width:900px; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    .explorer-table-wrap table { min-width:900px; }
+    .contract { min-width:560px; }
     th, td { padding:8px 7px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
     th:first-child, td:first-child { text-align:left; }
     .explorer-footer { display:flex; justify-content:space-between; gap:12px; margin-top:12px; color:var(--muted); font-size:12px; }
-    @media (max-width:760px) { main { width:min(100vw - 20px,1380px); } header, .grid { display:block; } nav { margin-top:12px; } .panel { overflow:hidden; } }
+    @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+    @media (max-width:760px) { main { width:min(100vw - 16px,1440px); padding-top:4px; } header { align-items:stretch; flex-direction:column; gap:8px; } nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; } nav a { min-width:0; padding-inline:5px; text-align:center; } .topbar-actions { width:100%; justify-content:space-between; margin-left:0; } .panel { overflow-x:auto; } .hero { padding:16px; } }
   </style>
 </head>
 <body><main>
@@ -75,7 +78,7 @@
             </select>
           </label>
           <label><span data-i18n="searchFilter">Arama</span>
-            <input id="reo-text-filter" type="search" placeholder="komut, segment veya değer ara">
+            <input id="reo-text-filter" type="search" placeholder="Komut, segment veya değer ara" data-i18n-placeholder="searchPlaceholder">
           </label>
           <label class="check-label"><input id="reo-clipping-filter" type="checkbox"> <span data-i18n="incidentFilter">Clipping / termal limit</span></label>
           <button id="reo-reset-filter" type="button" data-i18n="clearFilters">Filtreleri temizle</button>
@@ -170,10 +173,15 @@
   };
   Object.assign(dictionary.tr, { sourceLimitsTitle:'3. Veri kaynağı ve sınırlar', currentSource:'Mevcut kaynak:', sourceLimitsCopy:'Bu prototip takım içi gerçek araç parametrelerini kullanmaz. Enerji limitleri ve termal varsayımlar genel hibrit yarış aracı modeli içindir.', inputContractTitle:'4. Girdi veri sözleşmesi', outputContractTitle:'5. Model çıktı sözleşmesi', apiContractTitle:'6. API sözleşmesi', columnHeader:'Kolon', meaningHeader:'Anlam', contractInputDescription:'FastF1 veya sentetik telemetri girdisi', contractOutputDescription:'Enerji modeli tarafından üretilen karar ve telemetri alanı', apiContractCopy:'Oturum, KPI, canlı karar ve grafik serileri API uç noktalarından döndürülür.', openApiDocs:'API OpenAPI dokümantasyonunu aç' });
   Object.assign(dictionary.en, { sourceLimitsTitle:'3. Data source and limits', currentSource:'Current source:', sourceLimitsCopy:'This prototype does not use private team vehicle parameters. Energy limits and thermal assumptions represent a generic hybrid race-car model.', inputContractTitle:'4. Input data contract', outputContractTitle:'5. Model output contract', apiContractTitle:'6. API contract', columnHeader:'Column', meaningHeader:'Meaning', contractInputDescription:'FastF1 or synthetic telemetry input', contractOutputDescription:'Decision and telemetry fields produced by the energy model', apiContractCopy:'Session context, KPIs, live decisions, and chart series are returned by API endpoints.', openApiDocs:'Open API documentation' });
+  Object.assign(dictionary.tr, { guideTitle:'Kılavuz ve Veri Sözleşmesi', guideCopy:'Operasyon akışı, karar mantığı, model sınırları ve veri sözleşmeleri.', deployLogic:'Deploy: enerji değeri yüksek hızlanma bölgesinde güç kullan.', regenLogic:'Regen: frenleme enerjisini sonraki deploy fırsatı için geri kazan.', thermalLogic:'Termal koruma: batarya sıcaklık payını koru.', holdLogic:'Enerji koruma: potansiyel enerji açığında veya bitiş rezervi gerektiğinde mevcut haritayı koru.' });
+  Object.assign(dictionary.en, { guideTitle:'Guide & Data Contract', guideCopy:'Operating workflow, decision logic, model limits, and data contracts.', deployLogic:'Deploy: use power where acceleration has the highest lap-time value.', regenLogic:'Regen: recover braking energy for the next deployment opportunity.', thermalLogic:'Thermal protection: preserve battery temperature headroom.', holdLogic:'Energy hold: protect the map when an energy deficit or finish reserve is expected.' });
+  Object.assign(dictionary.tr, { searchPlaceholder:'Komut, segment veya değer ara', explorerStrategyHeader:'Strateji', explorerTimeHeader:'Zaman', explorerDistanceHeader:'Mesafe', explorerSegmentHeader:'Segment', explorerCommandHeader:'Komut', explorerBatteryHeader:'Batarya', explorerRiskHeader:'Risk', explorerStatusHeader:'Durum' });
+  Object.assign(dictionary.en, { rawDataTitle:'Inspect Raw Telemetry', rawDataHeading:'Telemetry Data Explorer', searchPlaceholder:'Search command, segment, or value', explorerStrategyHeader:'Strategy', explorerTimeHeader:'Time', explorerDistanceHeader:'Distance', explorerSegmentHeader:'Segment', explorerCommandHeader:'Command', explorerBatteryHeader:'Battery', explorerRiskHeader:'Risk', explorerStatusHeader:'Status' });
   const setLanguage = language => {
     document.documentElement.lang = language;
     localStorage.setItem('reo-language', language);
     document.querySelectorAll('[data-i18n]').forEach(node => { if (dictionary[language][node.dataset.i18n]) node.textContent = dictionary[language][node.dataset.i18n]; });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(node => { if (dictionary[language][node.dataset.i18nPlaceholder]) node.placeholder = dictionary[language][node.dataset.i18nPlaceholder]; });
     document.querySelectorAll('[data-i18n-tr]').forEach(node => { node.textContent = language === 'en' ? node.dataset.i18nEn : node.dataset.i18nTr; });
     document.getElementById('lang-tr').classList.toggle('active', language === 'tr');
     document.getElementById('lang-en').classList.toggle('active', language === 'en');
