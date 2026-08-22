@@ -45,6 +45,7 @@ def render_report(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Race Energy Orchestrator Dashboard</title>
+  <script>document.documentElement.dataset.theme = localStorage.getItem('reo-theme') || 'dark';</script>
   <link rel="prefetch" href="explorer.html{selection_query}">
   <link rel="prefetch" href="guide.html{selection_query}">
   <style>
@@ -164,6 +165,13 @@ def render_report(
     .topbar-actions {{ display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }}
     [data-theme="dark"] .panel, [data-theme="dark"] .hero-main, [data-theme="dark"] .hero-metrics, [data-theme="dark"] .metric, [data-theme="dark"] .insight, [data-theme="dark"] .command, [data-theme="dark"] details {{ background: var(--surface); color: var(--ink); }}
     [data-theme="dark"] .panel table th, [data-theme="dark"] .panel table td {{ border-color: var(--line); }}
+    [data-theme="dark"] .contract th {{ background:#202a34; color:var(--ink); }}
+    [data-theme="dark"] .contract td code {{ background:#27333e; color:#eef3f7; border:1px solid #425261; }}
+    #reo-page-loading {{ position:fixed; inset:0; z-index:1000; display:grid; place-items:center; background:var(--bg); color:var(--ink); opacity:0; pointer-events:none; transition:opacity .16s ease; }}
+    #reo-page-loading.visible {{ opacity:1; pointer-events:auto; }}
+    .page-loading-card {{ display:grid; gap:12px; justify-items:center; padding:28px; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow); }}
+    .page-loading-spinner {{ width:28px; height:28px; border:3px solid var(--line); border-top-color:var(--red); border-radius:50%; animation:reo-spin .8s linear infinite; }}
+    @keyframes reo-spin {{ to {{ transform:rotate(360deg); }} }}
     [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] button {{ color-scheme: dark; }}
     .purpose {{ display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 12px; align-items: stretch; }}
     .purpose-card {{ padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }}
@@ -566,6 +574,7 @@ def render_report(
   </style>
 </head>
 <body>
+  <div id="reo-page-loading" aria-live="polite" aria-busy="true"><div class="page-loading-card"><span class="page-loading-spinner" aria-hidden="true"></span><b data-i18n="loadingData">Veri yükleniyor</b><small data-i18n="loadingDataCopy">Seçilen oturum ve pist analizi hazırlanıyor.</small></div></div>
 <main>
   <div class="topbar">
     <span class="topbar-label" data-i18n="panelPurpose">Race Energy Orchestrator / Energy decision cockpit</span>
@@ -628,7 +637,12 @@ def render_report(
           document.getElementById('reo-selection-form').addEventListener('submit', event => {{
             event.preventDefault();
             const next = new URLSearchParams({{ year: document.getElementById('reo-year-select').value, event: document.getElementById('reo-event-select').value, session_name: document.getElementById('reo-session-select').value, driver: document.getElementById('reo-driver-select').value }});
-            window.location.search = next.toString();
+            if (window.reoRefreshDashboard) {{
+              window.reoRefreshDashboard(next);
+            }} else {{
+              document.getElementById('reo-page-loading').classList.add('visible');
+              window.location.search = next.toString();
+            }}
           }});
         }})();
       </script>
@@ -647,7 +661,7 @@ def render_report(
         (() => {{
           const apiBase = document.documentElement.dataset.apiBase || new URLSearchParams(window.location.search).get('api_base') || '';
           window.reoApiBase = apiBase;
-          const selectedQuery = window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
+          const getSelectedQuery = () => window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
           const setText = (id, value) => {{ const node = document.getElementById(id); if (node) node.textContent = value; }};
           const setDataAvailability = (state, message = '') => {{
             const status = document.getElementById('reo-data-status');
@@ -660,8 +674,8 @@ def render_report(
           const syncDashboardContext = async () => {{
             try {{
               const [sessionResponse, metricsResponse] = await Promise.all([
-                fetch(`${{apiBase}}/api/session${{selectedQuery}}`, {{ cache: 'no-store' }}),
-                fetch(`${{apiBase}}/api/metrics${{selectedQuery}}`, {{ cache: 'no-store' }})
+                fetch(`${{apiBase}}/api/session${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
+                fetch(`${{apiBase}}/api/metrics${{getSelectedQuery()}}`, {{ cache: 'no-store' }})
               ]);
               if (sessionResponse.status === 409 || metricsResponse.status === 409) {{
                 const response = sessionResponse.status === 409 ? sessionResponse : metricsResponse;
@@ -705,6 +719,7 @@ def render_report(
           }};
           syncDashboardContext();
           window.setInterval(syncDashboardContext, 3000);
+          window.reoSyncDashboardContext = syncDashboardContext;
         }})();
       </script>
 
@@ -720,7 +735,7 @@ def render_report(
           {plot_html}
           <script>
             (() => {{
-              const selectedQuery = window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
+              const getSelectedQuery = () => window.reoSelectionQuery ? `?${{window.reoSelectionQuery}}` : '';
               const updateTelemetry = row => {{
                 if (!row) return;
                 const plot = document.getElementById('reo-telemetry-plot');
@@ -817,9 +832,9 @@ def render_report(
                 if (!plot || !window.Plotly) return;
                 try {{
                   const [traceResponse, metricsResponse, scenarioResponse] = await Promise.all([
-                    fetch(`${{window.reoApiBase}}/api/trace${{selectedQuery}}`, {{ cache: 'no-store' }}),
-                    fetch(`${{window.reoApiBase}}/api/metrics${{selectedQuery}}`, {{ cache: 'no-store' }}),
-                    fetch(`${{window.reoApiBase}}/api/scenarios${{selectedQuery}}`, {{ cache: 'no-store' }})
+                    fetch(`${{window.reoApiBase}}/api/trace${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
+                    fetch(`${{window.reoApiBase}}/api/metrics${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
+                    fetch(`${{window.reoApiBase}}/api/scenarios${{getSelectedQuery()}}`, {{ cache: 'no-store' }})
                   ]);
                   if (!traceResponse.ok || !metricsResponse.ok) throw new Error('Track analysis unavailable');
                   const payload = await traceResponse.json();
@@ -855,6 +870,21 @@ def render_report(
                   console.warn('Trace API unavailable; keeping embedded chart.', error);
                 }}
               window.addEventListener('reo-language-change', () => {{ renderInsights(lastInsightRows, lastInsightTrace); }});
+              window.reoUpdatePlotForSelection = updatePlotForSelection;
+              }};
+              window.reoRefreshDashboard = async next => {{
+                const overlay = document.getElementById('reo-page-loading');
+                const submit = document.querySelector('#reo-selection-form button[type="submit"]');
+                if (overlay) overlay.classList.add('visible');
+                if (submit) submit.disabled = true;
+                window.reoSelectionQuery = next.toString();
+                window.history.pushState({{}}, '', `?${{window.reoSelectionQuery}}`);
+                try {{
+                  await Promise.all([window.reoSyncDashboardContext(), updatePlotForSelection()]);
+                }} finally {{
+                  if (submit) submit.disabled = false;
+                  if (overlay) overlay.classList.remove('visible');
+                }}
               }};
               updatePlotForSelection();
             }})();
@@ -899,8 +929,8 @@ def render_report(
     Object.assign(dictionary.en, {{ panelPurpose: "Race Energy Orchestrator / Energy decision cockpit", heroTitle: "Energy decision cockpit", heroCopy: "Fixed-map and predictive orchestration comparison.", compactStatus: "Operational view" }});
     Object.assign(dictionary.tr, {{ lapImprovement: "Tur süresi iyileşmesi", vsFixed: "Sabit haritaya göre", clippingReduction: "Clipping azalması", orchestratorStrategy: "Orchestrator stratejisi", regenEvents: "Regen olayları", regenPoints: "Regen karar noktası", previous: "Önceki", next: "Sonraki", orchestrationGain: "Orkestrasyon kazancı", lapGainCopy: "Sabit haritaya karşı tur süresi iyileşmesi.", clippingControl: "Clipping kontrolü", energyUse: "Deploy yoğunluğu", decisionMode: "Karar modu", dominantCommand: "Tur örneklerinin baskın komutu.", sideLap: "Tur süresi kazancı", sideClipping: "Orchestrator clipping", sideRisk: "Potansiyel clipping riski", thermalHeadroom: "Termal pay", thermalHeadroomCopy: "Yumuşak limite göre kalan batarya sıcaklık alanı.", controlScore: "Kontrol skoru", controlScoreCopy: "Clipping ve termal limit sürelerinden türetilen karar kalitesi.", lookahead: "Lookahead", lookaheadCopy: "Yaklaşan uzun düzlükler için enerji rezerv ufku.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performansı, farklı başlangıç ve termal koşullar altında aynı pist modeliyle karşılaştırılıyor.", scenarioName: "Senaryo", scenarioAmbient: "Ortam", scenarioLapGain: "Tur kazancı", scenarioClipping: "Clipping azalması", scenarioThermal: "Termal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Durum", tableStrategy: "Strateji", tableLapProxy: "Tur proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping zaman etkisi (proxy s)", tableThermal: "Termal limit (s)", tableSpeedLoss: "Maksimum hız kaybı", tableEndSoc: "Final SoC", tableUnused: "Kalan enerji", tableMaxTemp: "Maks. batarya sıcaklığı", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy yoğunluğu %", tableScore: "Kontrol skoru", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Mesafe", durationHeader: "Süre", avgSpeedHeader: "Ort. hız" }});
     Object.assign(dictionary.en, {{ lapImprovement: "Lap time improvement", vsFixed: "Compared with fixed map", clippingReduction: "Clipping reduction", orchestratorStrategy: "Orchestrator strategy", regenEvents: "Regen events", regenPoints: "Regen decision points", previous: "Previous", next: "Next", orchestrationGain: "Orchestration gain", lapGainCopy: "Lap time improvement versus the fixed map.", clippingControl: "Clipping control", energyUse: "Deploy intensity", decisionMode: "Decision mode", dominantCommand: "Dominant command across lap samples.", sideLap: "Lap time gain", sideClipping: "Orchestrator clipping", sideRisk: "Potential clipping risk", thermalHeadroom: "Thermal headroom", thermalHeadroomCopy: "Battery temperature margin to the soft limit.", controlScore: "Control score", controlScoreCopy: "Decision quality derived from clipping and thermal-limit time.", lookahead: "Lookahead", lookaheadCopy: "Energy reserve horizon for upcoming long straights.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performance compared across starting and thermal conditions on the same track model.", scenarioName: "Scenario", scenarioAmbient: "Ambient", scenarioLapGain: "Lap gain", scenarioClipping: "Clipping reduction", scenarioThermal: "Thermal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Status", tableStrategy: "Strategy", tableLapProxy: "Lap proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping time effect (proxy s)", tableThermal: "Thermal limit (s)", tableSpeedLoss: "Maximum speed loss", tableEndSoc: "Final SoC", tableUnused: "Unused energy", tableMaxTemp: "Max battery temperature", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy intensity %", tableScore: "Control score", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Distance", durationHeader: "Duration", avgSpeedHeader: "Avg. speed" }});
-    Object.assign(dictionary.tr, {{ sessionSelectLabel: "Oturum", driverSelectLabel: "Sürücü", telemetrySupportCopy: "Ham karar kayıtlarını filtrele, karşılaştır ve incele.", guideSupportCopy: "Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.", explorerRows: "kayıt", explorerPage: "Sayfa", explorerNoResults: "Filtreye uyan kayıt yok.", explorerStrategyHeader: "Strateji", explorerTimeHeader: "Zaman", explorerDistanceHeader: "Mesafe", explorerSegmentHeader: "Segment", explorerCommandHeader: "Komut", explorerBatteryHeader: "Batarya", explorerRiskHeader: "Risk", explorerStatusHeader: "Durum" }});
-    Object.assign(dictionary.en, {{ sessionSelectLabel: "Session", driverSelectLabel: "Driver", telemetrySupportCopy: "Filter, compare, and inspect raw decision records.", guideSupportCopy: "How to use the panel, model limits, and the data contract.", explorerRows: "records", explorerPage: "Page", explorerNoResults: "No records match the filters.", explorerStrategyHeader: "Strategy", explorerTimeHeader: "Time", explorerDistanceHeader: "Distance", explorerSegmentHeader: "Segment", explorerCommandHeader: "Command", explorerBatteryHeader: "Battery", explorerRiskHeader: "Risk", explorerStatusHeader: "Status" }});
+    Object.assign(dictionary.tr, {{ sessionSelectLabel: "Oturum", driverSelectLabel: "Sürücü", telemetrySupportCopy: "Ham karar kayıtlarını filtrele, karşılaştır ve incele.", guideSupportCopy: "Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.", explorerRows: "kayıt", explorerPage: "Sayfa", explorerNoResults: "Filtreye uyan kayıt yok.", explorerStrategyHeader: "Strateji", explorerTimeHeader: "Zaman", explorerDistanceHeader: "Mesafe", explorerSegmentHeader: "Segment", explorerCommandHeader: "Komut", explorerBatteryHeader: "Batarya", explorerRiskHeader: "Risk", explorerStatusHeader: "Durum", loadingData: "Veri yükleniyor", loadingDataCopy: "Seçilen oturum ve pist analizi hazırlanıyor." }});
+    Object.assign(dictionary.en, {{ sessionSelectLabel: "Session", driverSelectLabel: "Driver", telemetrySupportCopy: "Filter, compare, and inspect raw decision records.", guideSupportCopy: "How to use the panel, model limits, and the data contract.", explorerRows: "records", explorerPage: "Page", explorerNoResults: "No records match the filters.", explorerStrategyHeader: "Strategy", explorerTimeHeader: "Time", explorerDistanceHeader: "Distance", explorerSegmentHeader: "Segment", explorerCommandHeader: "Command", explorerBatteryHeader: "Battery", explorerRiskHeader: "Risk", explorerStatusHeader: "Status", loadingData: "Loading data", loadingDataCopy: "Preparing the selected session and track analysis." }});
     const setLanguage = language => {{
       document.documentElement.lang = language === 'en' ? 'en' : 'tr';
       window.reoLanguage = language === 'en' ? 'en' : 'tr';
@@ -1112,7 +1142,7 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
         (() => {{
           const feed = {payload};
           window.reoLapDistanceM = feed.length ? Number(feed[feed.length - 1].distance_m) : 1;
-          const selectedQuery = window.reoSelectionQuery ? `&${{window.reoSelectionQuery}}` : '';
+          const getSelectedQuery = () => window.reoSelectionQuery ? `&${{window.reoSelectionQuery}}` : '';
           const labels = {{
             tr: {{ title: 'Canlı karar konsolu', subtitle: 'Yarış mühendisi için anlık enerji önerisi', soc: 'Enerji deposu', temp: 'Batarya', risk: 'Potansiyel clipping riski', next: 'Sonraki düzlük', speed: 'Hız', deploy: 'Deploy', regen: 'Regen', aero: 'Aero', segment: 'Segment', confidence: 'Güven', context: 'Tur içi konum' }},
             en: {{ title: 'Live decision console', subtitle: 'Real-time energy recommendation for the race engineer', soc: 'Energy store', temp: 'Battery', risk: 'Potential clipping risk', next: 'Next straight', speed: 'Speed', deploy: 'Deploy', regen: 'Regen', aero: 'Aero', segment: 'Segment', confidence: 'Confidence', context: 'Lap position' }}
@@ -1163,7 +1193,7 @@ def _live_decision_console(feed: pd.DataFrame, source: str) -> str:
           const render = () => renderRow(feed[index]);
           const syncApi = async () => {{
             try {{
-              const response = await fetch(`${{window.reoApiBase}}/api/decision?index=${{index}}${{selectedQuery}}`, {{ cache: 'no-store' }});
+              const response = await fetch(`${{window.reoApiBase}}/api/decision?index=${{index}}${{getSelectedQuery()}}`, {{ cache: 'no-store' }});
               if (!response.ok) throw new Error('API unavailable');
               const payload = await response.json();
               seek.max = String(Math.max(Number(payload.total) - 1, 0));

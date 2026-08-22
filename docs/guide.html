@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Guide &amp; Data Contract | Race Energy Orchestrator</title>
+  <script>document.documentElement.dataset.theme = localStorage.getItem('reo-theme') || 'dark';</script>
   <style>
     :root { --bg:#f3f5f2; --surface:#fff; --ink:#14171c; --muted:#66717d; --line:#d9ded8; --red:#b5121b; --red-deep:#7f0c14; --shadow:0 14px 34px rgba(24,29,35,.08); }
     [data-theme="dark"] { --bg:#0d1116; --surface:#151b22; --ink:#eef3f7; --muted:#aab6c1; --line:#303b47; --shadow:0 14px 34px rgba(0,0,0,.28); }
@@ -31,6 +32,8 @@
     .contract { width:100%; border-collapse:collapse; font-size:13px; }
     .contract th, .contract td { padding:9px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
     .contract th { background:#f4f6f5; }
+    [data-theme="dark"] .contract th { background:#202a34; color:var(--ink); }
+    [data-theme="dark"] .contract td code { background:#27333e; color:#eef3f7; border:1px solid #425261; }
     code { padding:1px 4px; border-radius:4px; background:#eef2f1; }
     .explorer-heading { display:flex; justify-content:space-between; gap:12px; align-items:center; }
     .data-explorer { border:0; box-shadow:none; padding:0; }
