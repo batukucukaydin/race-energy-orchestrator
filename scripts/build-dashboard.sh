@@ -4,4 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-python3 -m race_energy_orchestrator --synthetic-only --output docs/index.html
+rm -rf docs
+mkdir -p docs
+cp -R web/. docs/
+PLOTLY_JS="$(python3 -c 'from pathlib import Path; import plotly; print(Path(plotly.__file__).parent / "package_data" / "plotly.min.js")')"
+cp "$PLOTLY_JS" docs/assets/plotly.min.js

@@ -1,40 +1,29 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dist = resolve(root, "dist");
 const server = resolve(dist, "server");
 
-const files = {
-  "/": { file: "index.html", type: "text/html; charset=utf-8" },
-  "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
-};
+const docs = resolve(root, "docs");
+const contentTypes = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".csv": "text/csv; charset=utf-8" };
 
-const optionalFiles = {
-  "/metrics.csv": { file: "metrics.csv", type: "text/csv; charset=utf-8" },
-  "/strategy_trace.csv": { file: "strategy_trace.csv", type: "text/csv; charset=utf-8" },
-};
-
-for (const [route, meta] of Object.entries(optionalFiles)) {
-  try {
-    await readFile(resolve(root, "docs", meta.file));
-    files[route] = meta;
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
+async function walk(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(entries.map(entry => entry.isDirectory() ? walk(resolve(directory, entry.name)) : resolve(directory, entry.name)));
+  return nested.flat();
 }
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(server, { recursive: true });
 
 const entries = {};
-for (const [route, meta] of Object.entries(files)) {
-  entries[route] = {
-    type: meta.type,
-    body: await readFile(resolve(root, "docs", meta.file), "utf8"),
-  };
+for (const file of await walk(docs)) {
+  const pathname = `/${relative(docs, file).split(sep).join("/")}`;
+  entries[pathname] = { type: contentTypes[extname(file)] || "application/octet-stream", body: await readFile(file, "utf8") };
 }
+entries["/"] = entries["/index.html"];
 
 const worker = `const files = ${JSON.stringify(entries)};
 

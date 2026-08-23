@@ -4,27 +4,36 @@ Predictive hybrid race-vehicle energy management and clipping-prevention prototy
 
 The project is intentionally team-neutral and vehicle-neutral. Its default configuration uses a 2026-style formula-car regulation profile as an example, not a real team, driver, or car dataset.
 
-## Run
+## Run the live application
 
-From this folder:
+The live product is a FastAPI application with a separate static client in `web/`. Start one server:
 
 ```bash
-python -m race_energy_orchestrator --year 2026 --event Monza --session Q --driver LEC --output outputs/report.html
+python3 -m uvicorn race_energy_orchestrator.api:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-Offline deterministic demo:
+Open `http://localhost:8001/`. Dashboard, Telemetry, and Guide use the same stable application shell. Session changes fetch JSON from `/api/*` without a page reload.
+
+Frontend responsibilities:
+
+- `web/*.html`: semantic page structure only
+- `web/assets/styles.css`: shared design and responsive layout
+- `web/assets/app.js`: API state, localization, filters, replay, and charts
+
+Backend responsibilities:
+
+- `src/race_energy_orchestrator/api.py`: HTTP contracts and static-file serving
+- Python model modules: FastF1 loading, segmentation, strategy, simulation, metrics, and stint planning
+
+## Offline report export
+
+The CLI still supports a portable, self-contained report when an explicit offline artifact is required:
 
 ```bash
 python -m race_energy_orchestrator --synthetic-only --output outputs/report.html
 ```
 
-Dashboard UI output:
-
-```bash
-python -m race_energy_orchestrator --synthetic-only --output outputs/dashboard.html
-```
-
-All telemetry, strategy decisions, filters, charts, and scenario analysis are embedded in the self-contained HTML dashboard. CSV files are not written unless an explicit output path is provided.
+The exported report embeds its data and Plotly runtime by design. It is not the primary live web application. CSV files are not written unless an explicit output path is provided.
 
 The dashboard begins with a synthetic live-decision replay for the race engineer. It uses one operator command vocabulary (`THERMAL PROTECT`, `REGEN PRIORITY`, `ENERGY HOLD`, `DEPLOY NOW`) and separates realized clipping duration from potential future clipping risk. Deploy intensity is normalized against the MGU-K power-time envelope; it is not cumulative deploy energy divided by a single-lap battery capacity.
 
@@ -44,20 +53,14 @@ python -m race_energy_orchestrator --synthetic-only --compare-scenarios --output
 
 This adds the comparison table to the dashboard. To additionally export CSV data, pass `--metrics-output`, `--trace-output`, or `--comparison-output` explicitly.
 
-Deploy-ready static output:
+Build the static client copy:
 
 ```bash
-python -m race_energy_orchestrator --synthetic-only --api-base http://localhost:8001 --output docs/index.html
-python -m http.server 8000 --directory docs
+./scripts/build-dashboard.sh
+npm run build
 ```
 
-Then open `http://localhost:8000`.
-
-FastAPI decision backend:
-
-```bash
-python3 -m uvicorn race_energy_orchestrator.api:app --host 127.0.0.1 --port 8001
-```
+`docs/` is generated from `web/` and marked as generated for GitHub Linguist. A static deployment still needs the API under the same `/api` origin or an equivalent reverse proxy.
 
 API endpoints:
 
@@ -71,12 +74,13 @@ API endpoints:
 - `GET /api/scenarios`: selected-track scenario comparison
 - `GET /api/stint-plan?current_lap=1&horizon_laps=5`: bounded multi-lap energy plan
 
-The web panel uses FastF1-backed API data when available. If the API is offline or FastF1 has no telemetry, the dashboard keeps the embedded snapshot and labels it as an embedded fallback; it never presents that snapshot as live data. A future race returns `409` and hides analysis panels instead of fabricating telemetry.
+The live web panel only renders data returned by the FastAPI backend. If the API is offline or FastF1 has no telemetry, it shows a clear error state and does not substitute embedded telemetry. A future race returns `409` instead of fabricating telemetry.
 
 Outputs:
 
 - `outputs/report.html`: self-contained Plotly HTML report
-- `docs/index.html`: static dashboard entrypoint for deployment
+- `web/`: primary live frontend source
+- `docs/`: generated static deployment copy
 - Optional CSV exports are created only when `--metrics-output`, `--trace-output`, or `--comparison-output` is explicitly passed.
 
 ## Model Basis

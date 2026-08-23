@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from threading import RLock
 
 import pandas as pd
+import plotly
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .config import EnergyConfig, F1_2026_EVENTS, F1_2026_RACE_END_DATES, SUPPORTED_YEAR, event_data_available
@@ -116,6 +120,9 @@ TRACK_OPTIONS = [
 ]
 
 _SESSION_LOCK = RLock()
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_WEB_ROOT = _PROJECT_ROOT / "web"
+_PLOTLY_BUNDLE = Path(plotly.__file__).resolve().parent / "package_data" / "plotly.min.js"
 
 
 def create_app() -> FastAPI:
@@ -134,8 +141,11 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> HealthResponse:
-        session = _session(event="Suzuka")
-        return HealthResponse(status="ok", service="race-energy-orchestrator", data_source=session["lap_data"].source)
+        return HealthResponse(status="ok", service="race-energy-orchestrator", data_source="FastF1")
+
+    @app.get("/assets/plotly.min.js", include_in_schema=False)
+    def plotly_bundle() -> FileResponse:
+        return FileResponse(_PLOTLY_BUNDLE, media_type="text/javascript", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/api/session", response_model=SessionResponse)
     def session_summary(
@@ -271,6 +281,7 @@ def create_app() -> FastAPI:
         )
         return StintPlanResponse.model_validate(plan)
 
+    app.mount("/", StaticFiles(directory=_WEB_ROOT, html=True), name="web")
     return app
 
 

@@ -260,3 +260,25 @@ def test_fastapi_never_returns_synthetic_fallback(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert "no FastF1 data" in response.json()["detail"]
+
+
+def test_fastapi_serves_separated_web_client() -> None:
+    client = TestClient(app)
+
+    index = client.get("/")
+    styles = client.get("/assets/styles.css")
+    script = client.get("/assets/app.js")
+    plotly_bundle = client.get("/assets/plotly.min.js")
+    telemetry = client.get("/explorer.html")
+    guide = client.get("/guide.html")
+
+    assert index.status_code == 200
+    assert len(index.content) < 50_000
+    assert 'href="/assets/styles.css"' in index.text
+    assert 'src="/assets/app.js"' in index.text
+    assert "plotly.js v" not in index.text.lower()
+    assert styles.status_code == 200 and "--red" in styles.text
+    assert script.status_code == 200 and "initDashboard" in script.text
+    assert plotly_bundle.status_code == 200 and len(plotly_bundle.content) > 1_000_000
+    assert telemetry.status_code == 200 and 'data-page="telemetry"' in telemetry.text
+    assert guide.status_code == 200 and 'data-page="guide"' in guide.text
