@@ -28,6 +28,8 @@ All telemetry, strategy decisions, filters, charts, and scenario analysis are em
 
 The dashboard begins with a synthetic live-decision replay for the race engineer. It uses one operator command vocabulary (`THERMAL PROTECT`, `REGEN PRIORITY`, `ENERGY HOLD`, `DEPLOY NOW`) and separates realized clipping duration from potential future clipping risk. Deploy intensity is normalized against the MGU-K power-time envelope; it is not cumulative deploy energy divided by a single-lap battery capacity.
 
+The five-lap stint planner derives a multi-lap energy budget from the selected representative lap. It schedules `BUILD`, `NORMAL`, `ATTACK`, `RECOVER`, or `COOL` modes while enforcing Energy Store capacity, minimum reserve, regeneration acceptance, and battery-temperature limits. Its SoC and ERS outputs remain model estimates; the dashboard labels whether they are synthetic or derived from FastF1 telemetry.
+
 Scenario run with hotter ambient conditions and a lower starting battery state:
 
 ```bash
@@ -67,6 +69,7 @@ API endpoints:
 - `GET /api/decision?index=0`: one operator decision
 - `GET /api/decisions?start=0&limit=100`: paginated decision stream
 - `GET /api/scenarios`: selected-track scenario comparison
+- `GET /api/stint-plan?current_lap=1&horizon_laps=5`: bounded multi-lap energy plan
 
 The web panel uses FastF1-backed API data when available. If the API is offline or FastF1 has no telemetry, the dashboard keeps the embedded snapshot and labels it as an embedded fallback; it never presents that snapshot as live data. A future race returns `409` and hides analysis panels instead of fabricating telemetry.
 

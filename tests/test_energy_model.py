@@ -11,6 +11,7 @@ from race_energy_orchestrator.live import build_live_decision_feed
 from race_energy_orchestrator.model import simulate_strategy
 from race_energy_orchestrator.segmentation import add_track_features
 from race_energy_orchestrator.scenarios import compare_scenarios
+from race_energy_orchestrator.stint import build_stint_plan
 from race_energy_orchestrator import api
 from race_energy_orchestrator.api import app
 from fastapi.testclient import TestClient
@@ -100,6 +101,7 @@ def test_cli_smoke_generates_report_and_csvs(tmp_path) -> None:
     assert "Race Energy Orchestrator" in report.read_text(encoding="utf-8")
     assert 'href="explorer.html' in report.read_text(encoding="utf-8")
     assert "Canlı karar konsolu" in report.read_text(encoding="utf-8")
+    assert "5 Turluk Enerji Planı" in report.read_text(encoding="utf-8")
     assert (tmp_path / "explorer.html").exists()
     assert (tmp_path / "guide.html").exists()
     assert not (tmp_path / "metrics.csv").exists()
@@ -155,6 +157,23 @@ def test_live_decision_feed_exposes_actionable_operator_fields() -> None:
     )
 
 
+def test_stint_plan_builds_bounded_five_lap_energy_budget() -> None:
+    config = EnergyConfig()
+    trace = simulate_strategy(_synthetic_featured(config), config, "predictive_mpc")
+    plan = build_stint_plan(trace, config, current_lap=12, horizon_laps=5, data_source="Synthetic")
+
+    assert plan["current_lap"] == 12
+    assert [lap["lap"] for lap in plan["laps"]] == [13, 14, 15, 16, 17]
+    assert len(plan["laps"]) == 5
+    assert {lap["mode"] for lap in plan["laps"]}.issubset({"BUILD", "NORMAL", "ATTACK", "RECOVER", "COOL"})
+    assert "BUILD" in {lap["mode"] for lap in plan["laps"]}
+    assert "ATTACK" in {lap["mode"] for lap in plan["laps"]}
+    assert all(config.minimum_soc_mj <= lap["target_soc_mj"] <= config.usable_energy_mj for lap in plan["laps"])
+    assert all(0.0 <= lap["clipping_risk"] <= 1.0 for lap in plan["laps"])
+    assert plan["summary"]["data_basis"] == "synthetic_estimate"
+    assert 55.0 <= plan["summary"]["confidence_pct"] <= 94.0
+
+
 def test_fastapi_decision_contract(monkeypatch) -> None:
     def synthetic_test_loader(year, event, session_name, driver, cache_dir, synthetic_only=False, allow_synthetic_fallback=True):
         return generate_synthetic_lap(track=event, year=year, session_name=session_name, driver=driver)
@@ -183,6 +202,10 @@ def test_fastapi_decision_contract(monkeypatch) -> None:
     monaco_session = client.get("/api/session", params={"year": 2026, "event": "Monaco"})
     monaco_trace = client.get("/api/trace", params={"year": 2026, "event": "Monaco"})
     monaco_scenarios = client.get("/api/scenarios", params={"year": 2026, "event": "Monaco"})
+    stint_plan = client.get(
+        "/api/stint-plan",
+        params={"year": 2026, "event": "Suzuka", "session_name": "R", "driver": "VER", "current_lap": 18},
+    )
     decision = client.get("/api/decision", params={"index": 4})
     decisions = client.get("/api/decisions", params={"start": 2, "limit": 3})
 
@@ -217,6 +240,10 @@ def test_fastapi_decision_contract(monkeypatch) -> None:
     assert monaco_trace.json()["predictive_mpc"][0]["driver_command"]
     assert monaco_scenarios.status_code == 200
     assert len(monaco_scenarios.json()) == 4
+    assert stint_plan.status_code == 200
+    assert stint_plan.json()["current_lap"] == 18
+    assert len(stint_plan.json()["laps"]) == 5
+    assert stint_plan.json()["summary"]["attack_lap"] is not None
     assert metrics.status_code == 200
     assert {row["strategy"] for row in metrics.json()["rows"]} == {"fixed_map", "predictive_mpc"}
     assert decision.json()["decision"]["command"]

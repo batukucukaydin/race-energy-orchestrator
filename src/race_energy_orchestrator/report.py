@@ -12,6 +12,7 @@ from plotly.subplots import make_subplots
 from .config import EnergyConfig, F1_2026_EVENTS, MODEL_COLUMNS, REQUIRED_INPUT_COLUMNS, SUPPORTED_YEAR, event_data_available
 from .data import LapData
 from .live import build_live_decision_feed
+from .stint import build_stint_plan
 
 
 def render_report(
@@ -35,6 +36,7 @@ def render_report(
     fig = _build_strategy_figure(fixed_trace, predictive_trace, config)
     plot_html = fig.to_html(full_html=False, include_plotlyjs="inline", config={"responsive": True, "displayModeBar": False}, div_id="reo-telemetry-plot")
     live_feed = build_live_decision_feed(predictive_trace, config)
+    stint_plan = build_stint_plan(predictive_trace, config, data_source=lap_data.source)
     selection_query = "?" + urlencode({"year": year, "event": event, "session_name": session_name, "driver": driver})
     notes_html = "".join(f"<li>{escape(note)}</li>" for note in lap_data.notes) or "<li>Fallback notu yok.</li>"
     event_options = _event_options(event)
@@ -245,6 +247,28 @@ def render_report(
     .live-stream-item {{ padding: 9px 11px; border: 1px solid #3a434d; border-radius: 6px; background: #20252c; }}
     .live-stream-item span {{ display: block; color: #aeb9c4; font-size: 10px; font-weight: 800; text-transform: uppercase; }}
     .live-stream-item b {{ display: block; margin-top: 4px; color: #fff; font-size: 15px; }}
+    .stint-planner {{ padding:18px; border:1px solid var(--line); border-radius:8px; background:var(--surface); box-shadow:var(--shadow); }}
+    .stint-head {{ display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:16px; }}
+    .stint-head h2 {{ margin:0 0 5px; font-size:18px; }}
+    .stint-head p {{ margin:0; font-size:12px; }}
+    .stint-summary {{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px 16px; }}
+    .stint-summary span {{ display:grid; gap:3px; min-width:84px; }}
+    .stint-summary small {{ color:var(--muted); font-size:10px; font-weight:800; text-transform:uppercase; }}
+    .stint-summary b {{ color:var(--ink); font-size:16px; text-transform:none; }}
+    .stint-laps {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); border:1px solid var(--line); border-radius:7px; overflow:hidden; }}
+    .stint-lap {{ position:relative; min-width:0; padding:14px; border-right:1px solid var(--line); }}
+    .stint-lap:last-child {{ border-right:0; }}
+    .stint-lap::before {{ content:''; position:absolute; inset:0 auto 0 0; width:3px; background:var(--blue); }}
+    .stint-lap[data-mode="BUILD"]::before, .stint-lap[data-mode="RECOVER"]::before {{ background:var(--teal); }}
+    .stint-lap[data-mode="ATTACK"]::before {{ background:var(--red); }}
+    .stint-lap[data-mode="COOL"]::before {{ background:var(--amber); }}
+    .stint-lap-top {{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:13px; }}
+    .stint-lap-top span {{ color:var(--muted); font-size:11px; font-weight:800; text-transform:uppercase; }}
+    .stint-mode {{ color:var(--ink) !important; }}
+    .stint-lap dl {{ display:grid; grid-template-columns:1fr auto; gap:7px 10px; margin:0; }}
+    .stint-lap dt {{ color:var(--muted); font-size:10px; font-weight:750; text-transform:uppercase; }}
+    .stint-lap dd {{ margin:0; font-size:12px; font-weight:800; text-align:right; }}
+    .stint-reason {{ margin:12px 0 0; min-height:38px; font-size:11px; line-height:1.4; }}
     .track-shell {{ position: relative; }}
     .track-marker {{ position: absolute; top: -4px; bottom: -4px; width: 3px; transform: translateX(-50%); border-radius: 4px; background: #fff; box-shadow: 0 0 0 2px var(--red), 0 0 12px rgba(181, 18, 27, 0.8); pointer-events: none; }}
     .decision-flow {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }}
@@ -584,6 +608,9 @@ def render_report(
       .selection-bar {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .live-stream {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .analysis-grid .command-list {{ grid-template-columns:1fr; }}
+      .stint-laps {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+      .stint-lap {{ border-bottom:1px solid var(--line); }}
+      .stint-lap:nth-child(2n) {{ border-right:0; }}
       .shell, .content, .hero, .grid, .panel {{ width: 100%; max-width: 100%; }}
     }}
     @media (max-width: 760px) {{
@@ -598,6 +625,11 @@ def render_report(
       .topbar-actions {{ display:grid; grid-template-columns:auto auto 34px; width:100%; justify-content:space-between; margin-left:0; }}
       .live-console-head {{ align-items:flex-start; flex-direction:column; }}
       .live-badge {{ max-width:100%; overflow-wrap:anywhere; }}
+      .stint-head {{ flex-direction:column; }}
+      .stint-summary {{ justify-content:flex-start; width:100%; }}
+      .stint-laps {{ grid-template-columns:1fr; }}
+      .stint-lap, .stint-lap:nth-child(2n) {{ border-right:0; border-bottom:1px solid var(--line); }}
+      .stint-lap:last-child {{ border-bottom:0; }}
       .api-indicator {{ max-width:150px; overflow:hidden; text-overflow:ellipsis; }}
       .insight-grid {{ grid-template-columns: 1fr; }}
       .metric {{ min-height: 104px; }}
@@ -692,6 +724,8 @@ def render_report(
       </div>
 
       {_live_decision_console(live_feed, lap_data.source)}
+
+      {_stint_plan_panel(stint_plan)}
 
       <script>
         (() => {{
@@ -875,19 +909,39 @@ def render_report(
                 const effective = document.documentElement.lang === 'en' ? ['Effective', 'Review'] : ['Etkili', 'İncelenmeli'];
                 body.innerHTML = rows.map(row => `<tr><td><b>${{html(String(row.scenario).replace('_', ' '))}}</b></td><td>${{number(row.ambient_temp_c, 1)}}C</td><td>${{number(row.lap_gain_s)}}s</td><td>${{number(row.clipping_reduction_s)}}s</td><td>${{number(row.orchestrator_thermal_limit_s)}}s</td><td>${{number(row.orchestrator_end_soc_mj)}} MJ</td><td><span class="pill${{row.effective ? '' : ' warning'}}">${{row.effective ? effective[0] : effective[1]}}</span></td></tr>`).join('');
               }};
+              let lastStintPlan = null;
+              const renderStintPlan = plan => {{
+                if (!plan?.laps?.length) return;
+                lastStintPlan = plan;
+                const language = document.documentElement.lang === 'en' ? 'en' : 'tr';
+                const copy = language === 'en'
+                  ? {{ lap:'Lap', target:'Target SoC', risk:'Risk', delta:'Lap effect', synthetic:'Synthetic estimate', fastf1:'FastF1-derived estimate' }}
+                  : {{ lap:'Tur', target:'Hedef SoC', risk:'Risk', delta:'Tur etkisi', synthetic:'Sentetik tahmin', fastf1:'FastF1 türetilmiş tahmin' }};
+                const set = (id, value) => {{ const node = document.getElementById(id); if (node) node.textContent = value; }};
+                set('reo-stint-state', plan.state.name);
+                set('reo-stint-attack', plan.summary.attack_lap ?? '—');
+                set('reo-stint-finish', `${{number(plan.summary.projected_finish_soc_pct, 1)}}%`);
+                set('reo-stint-confidence', `${{number(plan.summary.confidence_pct, 0)}}%`);
+                set('reo-stint-basis', plan.summary.data_basis === 'synthetic_estimate' ? copy.synthetic : copy.fastf1);
+                const target = document.getElementById('reo-stint-laps');
+                if (!target) return;
+                target.innerHTML = plan.laps.map(lap => `<article class="stint-lap" data-mode="${{html(lap.mode)}}"><div class="stint-lap-top"><span>${{copy.lap}} ${{lap.lap}}</span><span class="stint-mode">${{html(lap.mode)}}</span></div><dl><dt>${{copy.target}}</dt><dd>${{number(lap.target_soc_pct, 1)}}%</dd><dt>Deploy</dt><dd>${{number(lap.deploy_budget_mj, 2)}} MJ</dd><dt>Regen</dt><dd>${{number(lap.regen_budget_mj, 2)}} MJ</dd><dt>${{copy.risk}}</dt><dd>${{number(Number(lap.clipping_risk) * 100, 0)}}%</dd><dt>${{copy.delta}}</dt><dd>${{Number(lap.lap_time_delta_s) >= 0 ? '+' : ''}}${{number(lap.lap_time_delta_s)}}s</dd></dl><p class="stint-reason">${{html(language === 'en' ? lap.reason_en : lap.reason_tr)}}</p></article>`).join('');
+              }};
               const updatePlotForSelection = async () => {{
                 const plot = document.getElementById('reo-telemetry-plot');
                 if (!plot || !window.Plotly) return;
                 try {{
-                  const [traceResponse, metricsResponse, scenarioResponse] = await Promise.all([
+                  const [traceResponse, metricsResponse, scenarioResponse, stintResponse] = await Promise.all([
                     fetch(`${{window.reoApiBase}}/api/trace${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
                     fetch(`${{window.reoApiBase}}/api/metrics${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
-                    fetch(`${{window.reoApiBase}}/api/scenarios${{getSelectedQuery()}}`, {{ cache: 'no-store' }})
+                    fetch(`${{window.reoApiBase}}/api/scenarios${{getSelectedQuery()}}`, {{ cache: 'no-store' }}),
+                    fetch(`${{window.reoApiBase}}/api/stint-plan${{getSelectedQuery()}}`, {{ cache: 'no-store' }})
                   ]);
                   if (!traceResponse.ok || !metricsResponse.ok) throw new Error('Track analysis unavailable');
                   const payload = await traceResponse.json();
                   const metricPayload = await metricsResponse.json();
                   const scenarioPayload = scenarioResponse.ok ? await scenarioResponse.json() : [];
+                  const stintPayload = stintResponse.ok ? await stintResponse.json() : null;
                   const fixed = payload.fixed_map;
                   const predictive = payload.predictive_mpc;
                   renderMetrics(metricPayload.rows || []);
@@ -895,6 +949,7 @@ def render_report(
                   renderTimeline(predictive);
                   renderInsights(metricPayload.rows || [], predictive);
                   renderScenarios(scenarioPayload);
+                  renderStintPlan(stintPayload);
                   const x = predictive.map(row => row.distance_m);
                   const updates = [
                     {{ x: [x], y: [predictive.map(row => row.speed_kmh)] }},
@@ -917,9 +972,9 @@ def render_report(
                 }} catch (error) {{
                   console.warn('Trace API unavailable; keeping embedded chart.', error);
                 }}
-              window.addEventListener('reo-language-change', () => {{ renderInsights(lastInsightRows, lastInsightTrace); }});
-              window.reoUpdatePlotForSelection = updatePlotForSelection;
               }};
+              window.addEventListener('reo-language-change', () => {{ renderInsights(lastInsightRows, lastInsightTrace); renderStintPlan(lastStintPlan); }});
+              window.reoUpdatePlotForSelection = updatePlotForSelection;
               window.reoRefreshDashboard = async next => {{
                 const overlay = document.getElementById('reo-page-loading');
                 const submit = document.querySelector('#reo-selection-form button[type="submit"]');
@@ -978,6 +1033,8 @@ def render_report(
     Object.assign(dictionary.en, {{ lapImprovement: "Lap time improvement", vsFixed: "Compared with fixed map", clippingReduction: "Clipping reduction", orchestratorStrategy: "Orchestrator strategy", regenEvents: "Regen events", regenPoints: "Regen decision points", previous: "Previous", next: "Next", orchestrationGain: "Orchestration gain", lapGainCopy: "Lap time improvement versus the fixed map.", clippingControl: "Clipping control", energyUse: "Deploy intensity", decisionMode: "Decision mode", dominantCommand: "Dominant command across lap samples.", sideLap: "Lap time gain", sideClipping: "Orchestrator clipping", sideRisk: "Potential clipping risk", thermalHeadroom: "Thermal headroom", thermalHeadroomCopy: "Battery temperature margin to the soft limit.", controlScore: "Control score", controlScoreCopy: "Decision quality derived from clipping and thermal-limit time.", lookahead: "Lookahead", lookaheadCopy: "Energy reserve horizon for upcoming long straights.", finalSoc: "Final SoC", scenarioDescription: "Orchestrator performance compared across starting and thermal conditions on the same track model.", scenarioName: "Scenario", scenarioAmbient: "Ambient", scenarioLapGain: "Lap gain", scenarioClipping: "Clipping reduction", scenarioThermal: "Thermal limit", scenarioFinalSoc: "Final SoC", scenarioStatus: "Status", tableStrategy: "Strategy", tableLapProxy: "Lap proxy (s)", tableClipping: "Clipping (s)", tableClippingLoss: "Clipping time effect (proxy s)", tableThermal: "Thermal limit (s)", tableSpeedLoss: "Maximum speed loss", tableEndSoc: "Final SoC", tableUnused: "Unused energy", tableMaxTemp: "Max battery temperature", tableDeploy: "Deploy MJ", tableRegen: "Regen MJ", tableIntensity: "Deploy intensity %", tableScore: "Control score", segmentHeader: "Segment", aeroHeader: "Aero", distanceHeader: "Distance", durationHeader: "Duration", avgSpeedHeader: "Avg. speed" }});
     Object.assign(dictionary.tr, {{ sessionSelectLabel: "Oturum", driverSelectLabel: "Sürücü", telemetrySupportCopy: "Ham karar kayıtlarını filtrele, karşılaştır ve incele.", guideSupportCopy: "Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.", explorerRows: "kayıt", explorerPage: "Sayfa", explorerNoResults: "Filtreye uyan kayıt yok.", explorerStrategyHeader: "Strateji", explorerTimeHeader: "Zaman", explorerDistanceHeader: "Mesafe", explorerSegmentHeader: "Segment", explorerCommandHeader: "Komut", explorerBatteryHeader: "Batarya", explorerRiskHeader: "Risk", explorerStatusHeader: "Durum", loadingData: "Veri yükleniyor", loadingDataCopy: "Seçilen oturum ve pist analizi hazırlanıyor." }});
     Object.assign(dictionary.en, {{ sessionSelectLabel: "Session", driverSelectLabel: "Driver", telemetrySupportCopy: "Filter, compare, and inspect raw decision records.", guideSupportCopy: "How to use the panel, model limits, and the data contract.", explorerRows: "records", explorerPage: "Page", explorerNoResults: "No records match the filters.", explorerStrategyHeader: "Strategy", explorerTimeHeader: "Time", explorerDistanceHeader: "Distance", explorerSegmentHeader: "Segment", explorerCommandHeader: "Command", explorerBatteryHeader: "Battery", explorerRiskHeader: "Risk", explorerStatusHeader: "Status", loadingData: "Loading data", loadingDataCopy: "Preparing the selected session and track analysis." }});
+    Object.assign(dictionary.tr, {{ stintTitle: "5 Turluk Enerji Planı", stintCopy: "Enerji rezervini planlanan atak turuna hazırlayan çok turlu karar ufku.", stintState: "Durum", stintAttackLap: "Atak turu", stintFinishSoc: "Plan sonu SoC", stintConfidence: "Güven", stintBasis: "Veri temeli", stintTargetSoc: "Hedef SoC", stintRisk: "Risk", stintLapDelta: "Tur etkisi" }});
+    Object.assign(dictionary.en, {{ stintTitle: "5-Lap Energy Plan", stintCopy: "Multi-lap decision horizon that prepares the energy reserve for a planned attack.", stintState: "State", stintAttackLap: "Attack lap", stintFinishSoc: "Plan-end SoC", stintConfidence: "Confidence", stintBasis: "Data basis", stintTargetSoc: "Target SoC", stintRisk: "Risk", stintLapDelta: "Lap effect" }});
     const setLanguage = language => {{
       document.documentElement.lang = language === 'en' ? 'en' : 'tr';
       window.reoLanguage = language === 'en' ? 'en' : 'tr';
@@ -1150,6 +1207,48 @@ def _support_links(selection_query: str) -> str:
         <a href="guide.html{selection_query}" aria-label="Guide &amp; Contract"><b data-i18n="navGuide">Guide</b><span data-i18n="guideSupportCopy">Paneli kullanma mantığı, model sınırları ve kolon sözleşmesi.</span></a>
       </section>
 """
+
+
+def _stint_plan_panel(plan: dict[str, object]) -> str:
+    state = plan["state"]
+    summary = plan["summary"]
+    laps = plan["laps"]
+    assert isinstance(state, dict) and isinstance(summary, dict) and isinstance(laps, list)
+    attack_lap = summary.get("attack_lap")
+    lap_items = []
+    for lap in laps:
+        assert isinstance(lap, dict)
+        lap_items.append(
+            f"""
+            <article class="stint-lap" data-mode="{escape(str(lap['mode']))}">
+              <div class="stint-lap-top"><span data-i18n-tr="Tur {int(lap['lap'])}" data-i18n-en="Lap {int(lap['lap'])}">Tur {int(lap['lap'])}</span><span class="stint-mode">{escape(str(lap['mode']))}</span></div>
+              <dl>
+                <dt data-i18n="stintTargetSoc">Hedef SoC</dt><dd>{float(lap['target_soc_pct']):.1f}%</dd>
+                <dt>Deploy</dt><dd>{float(lap['deploy_budget_mj']):.2f} MJ</dd>
+                <dt>Regen</dt><dd>{float(lap['regen_budget_mj']):.2f} MJ</dd>
+                <dt data-i18n="stintRisk">Risk</dt><dd>{float(lap['clipping_risk']) * 100:.0f}%</dd>
+                <dt data-i18n="stintLapDelta">Tur etkisi</dt><dd>{float(lap['lap_time_delta_s']):+.3f}s</dd>
+              </dl>
+              <p class="stint-reason" data-i18n-tr="{escape(str(lap['reason_tr']))}" data-i18n-en="{escape(str(lap['reason_en']))}">{escape(str(lap['reason_tr']))}</p>
+            </article>
+            """.strip()
+        )
+    basis = "Sentetik tahmin" if summary["data_basis"] == "synthetic_estimate" else "FastF1 türetilmiş tahmin"
+    return f"""
+      <section class="stint-planner data-dependent" id="reo-stint-plan">
+        <div class="stint-head">
+          <div><h2 data-i18n="stintTitle">5 Turluk Enerji Planı</h2><p data-i18n="stintCopy">Enerji rezervini planlanan atak turuna hazırlayan çok turlu karar ufku.</p></div>
+          <div class="stint-summary">
+            <span><small data-i18n="stintState">Durum</small><b id="reo-stint-state">{escape(str(state['name']))}</b></span>
+            <span><small data-i18n="stintAttackLap">Atak turu</small><b id="reo-stint-attack">{attack_lap if attack_lap is not None else '—'}</b></span>
+            <span><small data-i18n="stintFinishSoc">Plan sonu SoC</small><b id="reo-stint-finish">{float(summary['projected_finish_soc_pct']):.1f}%</b></span>
+            <span><small data-i18n="stintConfidence">Güven</small><b id="reo-stint-confidence">{float(summary['confidence_pct']):.0f}%</b></span>
+            <span><small data-i18n="stintBasis">Veri temeli</small><b id="reo-stint-basis">{escape(basis)}</b></span>
+          </div>
+        </div>
+        <div class="stint-laps" id="reo-stint-laps">{''.join(lap_items)}</div>
+      </section>
+    """.strip()
 
 
 def _live_decision_console(feed: pd.DataFrame, source: str) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from threading import RLock
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -14,6 +15,7 @@ from .metrics import metrics_frame
 from .model import simulate_strategy
 from .scenarios import compare_scenarios
 from .segmentation import add_track_features
+from .stint import build_stint_plan
 
 
 class HealthResponse(BaseModel):
@@ -61,6 +63,48 @@ class ExplorerResponse(BaseModel):
     rows: list[dict[str, float | str | bool]]
 
 
+class StintStateResponse(BaseModel):
+    name: str
+    soc_mj: float
+    soc_pct: float
+    battery_temp_c: float
+    thermal_headroom_c: float
+    attack_required_soc_mj: float
+
+
+class StintSummaryResponse(BaseModel):
+    attack_lap: int | None
+    projected_finish_soc_mj: float
+    projected_finish_soc_pct: float
+    cumulative_lap_time_delta_s: float
+    confidence_pct: float
+    data_basis: str
+
+
+class StintLapResponse(BaseModel):
+    lap: int
+    mode: str
+    start_soc_mj: float
+    target_soc_mj: float
+    target_soc_pct: float
+    deploy_budget_mj: float
+    regen_budget_mj: float
+    battery_temp_c: float
+    clipping_risk: float
+    lap_time_delta_s: float
+    estimated_lap_time_s: float
+    reason_tr: str
+    reason_en: str
+
+
+class StintPlanResponse(BaseModel):
+    current_lap: int
+    horizon_laps: int
+    state: StintStateResponse
+    summary: StintSummaryResponse
+    laps: list[StintLapResponse]
+
+
 TRACK_OPTIONS = [
     {
         "event": event,
@@ -70,6 +114,8 @@ TRACK_OPTIONS = [
     }
     for event, label in F1_2026_EVENTS
 ]
+
+_SESSION_LOCK = RLock()
 
 
 def create_app() -> FastAPI:
@@ -206,11 +252,30 @@ def create_app() -> FastAPI:
         comparison = compare_scenarios(session["lap_data"].frame, session["config"])
         return comparison.to_dict(orient="records")
 
+    @app.get("/api/stint-plan", response_model=StintPlanResponse)
+    def stint_plan(
+        current_lap: int = Query(default=1, ge=1, le=200),
+        horizon_laps: int = Query(default=5, ge=3, le=10),
+        year: int = Query(default=SUPPORTED_YEAR, ge=SUPPORTED_YEAR, le=SUPPORTED_YEAR),
+        event: str = Query(default="Suzuka", min_length=2, max_length=80),
+        session_name: str = Query(default="Q", min_length=1, max_length=20),
+        driver: str = Query(default="LEC", min_length=2, max_length=4),
+    ) -> StintPlanResponse:
+        session = _session(year, event, session_name, driver)
+        plan = build_stint_plan(
+            session["predictive"],
+            session["config"],
+            current_lap=current_lap,
+            horizon_laps=horizon_laps,
+            data_source=session["lap_data"].source,
+        )
+        return StintPlanResponse.model_validate(plan)
+
     return app
 
 
 @lru_cache(maxsize=16)
-def _session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
+def _cached_session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
     if year == SUPPORTED_YEAR and event in F1_2026_RACE_END_DATES and not event_data_available(event):
         race_end = F1_2026_RACE_END_DATES[event].isoformat()
         raise HTTPException(
@@ -252,6 +317,19 @@ def _session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: st
             else f"{event}-like synthetic proxy"
         ),
     }
+
+
+def _session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
+    with _SESSION_LOCK:
+        return _cached_session(year, event, session_name, driver)
+
+
+def _clear_session_cache() -> None:
+    with _SESSION_LOCK:
+        _cached_session.cache_clear()
+
+
+_session.cache_clear = _clear_session_cache  # type: ignore[attr-defined]
 
 
 def _record(row: pd.Series) -> dict[str, float | str]:
