@@ -44,6 +44,16 @@
     <div id="notice" class="notice" hidden></div>
     <div id="dashboard-loading" class="loading-line" hidden><span></span><b data-i18n="loading">Veriler yükleniyor</b></div>
 
+    <section class="panel provenance-panel" aria-labelledby="provenance-title">
+      <div class="panel-heading"><div><p class="eyebrow" data-i18n="dataQualityEyebrow">VERİ KALİTESİ VE KAYNAK</p><h2 id="provenance-title" data-i18n="dataQualityTitle">Bu oturumun verisi neye dayanıyor?</h2></div><span id="provenance-badge" class="data-badge">—</span></div>
+      <div class="provenance-grid">
+        <div class="provenance-source"><span data-i18n="sourceDetail">Kaynak detayı</span><strong id="provenance-detail">—</strong><small id="provenance-message">—</small></div>
+        <div><span data-i18n="measuredTelemetry">Ölçülen telemetri</span><strong data-i18n="measuredFields">Zaman · Mesafe · Hız · Gaz · Fren</strong><small data-i18n="measuredNote">Seçili FastF1 turundan gelir</small></div>
+        <div><span data-i18n="estimatedSignals">Model tahminleri</span><strong data-i18n="estimatedFields">SoC · Deploy · Regen · Batarya</strong><small data-i18n="estimatedNote">ERS, termal ve risk sinyalleri</small></div>
+        <div><span data-i18n="sampleCount">Örnek sayısı</span><strong id="provenance-samples">—</strong><small id="provenance-window">—</small></div>
+      </div>
+    </section>
+
     <section class="kpi-grid" aria-label="Key performance indicators">
       <article class="kpi"><span data-i18n="lapGain">Tur Süresi Kazancı</span><strong id="kpi-lap">—</strong><small data-i18n="lapGainNote">Orchestrator ve sabit harita farkı</small></article>
       <article class="kpi"><span data-i18n="clipReduction">Clipping Azalması</span><strong id="kpi-clip">—</strong><small data-i18n="clipNote">Gerçekleşen kayıp süresi</small></article>

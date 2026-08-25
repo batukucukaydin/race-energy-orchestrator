@@ -276,6 +276,8 @@ def test_fastapi_serves_separated_web_client() -> None:
     assert len(index.content) < 50_000
     assert 'href="/assets/styles.css"' in index.text
     assert 'src="/assets/app.js"' in index.text
+    assert 'id="provenance-badge"' in index.text
+    assert 'data-i18n="estimatedSignals"' in index.text
     assert "plotly.js v" not in index.text.lower()
     assert styles.status_code == 200 and "--red" in styles.text
     assert script.status_code == 200 and "initDashboard" in script.text
