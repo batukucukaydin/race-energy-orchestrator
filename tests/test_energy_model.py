@@ -278,9 +278,14 @@ def test_fastapi_serves_separated_web_client() -> None:
     assert 'src="/assets/app.js"' in index.text
     assert 'id="provenance-badge"' in index.text
     assert 'data-i18n="estimatedSignals"' in index.text
+    assert 'data-i18n="chartClickHint"' in index.text
     assert "plotly.js v" not in index.text.lower()
     assert styles.status_code == 200 and "--red" in styles.text
     assert script.status_code == 200 and "initDashboard" in script.text
+    assert "bindChartSelection" in script.text and "nearestDecisionIndex" in script.text
+    assert "bindLinkedNavigation" in script.text and "jumpToDistance" in script.text
+    assert "data-decision-distance" in script.text and "markLinkedSelection" in script.text
+    assert 'role="button" tabindex="0"' in script.text
     assert plotly_bundle.status_code == 200 and len(plotly_bundle.content) > 1_000_000
     assert telemetry.status_code == 200 and 'data-page="telemetry"' in telemetry.text
     assert guide.status_code == 200 and 'data-page="guide"' in guide.text
