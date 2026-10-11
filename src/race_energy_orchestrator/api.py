@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
-from threading import RLock
 
 import pandas as pd
 import plotly
@@ -19,6 +17,7 @@ from .metrics import metrics_frame
 from .model import simulate_strategy
 from .scenarios import compare_scenarios
 from .segmentation import add_track_features
+from .session_cache import SessionCache
 from .stint import build_stint_plan
 
 
@@ -119,7 +118,11 @@ TRACK_OPTIONS = [
     for event, label in F1_2026_EVENTS
 ]
 
-_SESSION_LOCK = RLock()
+_SESSION_FAILURE_TTL_S = 30
+_SESSION_CACHE = SessionCache(
+    failure_ttl_s=_SESSION_FAILURE_TTL_S,
+    cache_error=lambda error: isinstance(error, HTTPException) and error.status_code == 503,
+)
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _WEB_ROOT = _PROJECT_ROOT / "web"
 _PLOTLY_BUNDLE = Path(plotly.__file__).resolve().parent / "package_data" / "plotly.min.js"
@@ -285,8 +288,7 @@ def create_app() -> FastAPI:
     return app
 
 
-@lru_cache(maxsize=16)
-def _cached_session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
+def _build_session(year: int, event: str, session_name: str, driver: str) -> dict[str, object]:
     if year == SUPPORTED_YEAR and event in F1_2026_RACE_END_DATES and not event_data_available(event):
         race_end = F1_2026_RACE_END_DATES[event].isoformat()
         raise HTTPException(
@@ -305,7 +307,11 @@ def _cached_session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_n
             allow_synthetic_fallback=False,
         )
     except FastF1DataUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+            headers={"Retry-After": str(_SESSION_FAILURE_TTL_S)},
+        ) from exc
     featured = add_track_features(lap_data.frame, config)
     fixed = simulate_strategy(featured, config, "fixed_map")
     predictive = simulate_strategy(featured, config, "predictive_mpc")
@@ -331,13 +337,12 @@ def _cached_session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_n
 
 
 def _session(year: int = SUPPORTED_YEAR, event: str = "Suzuka", session_name: str = "Q", driver: str = "LEC") -> dict[str, object]:
-    with _SESSION_LOCK:
-        return _cached_session(year, event, session_name, driver)
+    key = (year, event.strip(), session_name.strip().upper(), driver.strip().upper())
+    return _SESSION_CACHE.get(key, lambda: _build_session(*key))
 
 
 def _clear_session_cache() -> None:
-    with _SESSION_LOCK:
-        _cached_session.cache_clear()
+    _SESSION_CACHE.clear()
 
 
 _session.cache_clear = _clear_session_cache  # type: ignore[attr-defined]

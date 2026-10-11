@@ -1,103 +1,157 @@
-# Race Energy Orchestrator
+<p align="center">
+  <img src="assets/readme/brand.svg" alt="Race Energy Orchestrator — Predictive Energy Management" width="1000">
+</p>
 
-Predictive hybrid race-vehicle energy management and clipping-prevention prototype. It uses public FastF1 lap telemetry when available and overlays configurable synthetic ERS, battery, thermal, active aero, and strategy signals. If FastF1 data is unavailable, it falls back to a deterministic track/session/driver-specific synthetic lap.
+<p align="center">
+  <strong>Deploy with purpose. Recover with foresight. Protect the finish reserve.</strong><br>
+  Predictive hybrid energy management and clipping prevention built around 2026 race telemetry.
+</p>
 
-The project is intentionally team-neutral and vehicle-neutral. Its default configuration uses a 2026-style formula-car regulation profile as an example, not a real team, driver, or car dataset.
+<p align="center">
+  <strong>Python</strong> · FastAPI · FastF1 · NumPy · pandas · Plotly<br>
+  2026 session scope · TR / EN interface · Dark / light themes
+</p>
 
-## Run the live application
+<p align="center">
+  <a href="#the-problem">The Problem</a> ·
+  <a href="#the-engineering-workspace">Workspace</a> ·
+  <a href="#system-architecture">Architecture</a> ·
+  <a href="#data-and-model-boundaries">Data Boundaries</a>
+</p>
 
-The live product is a FastAPI application with a separate static client in `web/`. Start one server:
+---
 
-```bash
-python3 -m uvicorn race_energy_orchestrator.api:app --host 127.0.0.1 --port 8001 --reload
+## The Problem
+
+Electrical deployment is an energy-budget decision. Spending too much early in a lap can leave too little reserve for a later straight; protecting every joule can sacrifice useful acceleration. Regeneration, battery temperature, and the desired finish reserve complicate that trade-off.
+
+**Race Energy Orchestrator (REO)** compares a fixed deployment map with a predictive strategy that considers the track ahead. It brings energy use, recovery, thermal protection, and clipping prevention into one engineering workspace, making both the decision and its modeled consequences inspectable.
+
+In the simulation, **clipping** means requested electrical deployment cannot be delivered because energy is insufficient. Thermal power limiting is tracked separately. An elevated potential clipping risk describes future energy demand, rather than clipping that has already occurred.
+
+## The Engineering Workspace
+
+| Surface | Engineering Question | What It Shows |
+| --- | --- | --- |
+| **Dashboard** | What changed between the two strategies? | Modeled lap-time difference, clipping reduction, final SoC, and control score. |
+| **Decision Console** | What action does the controller recommend here? | Command, bilingual rationale, severity, battery state, potential risk, and time to the next straight. |
+| **Track Energy Plan** | Where is energy spent, recovered, or held? | Command segments linked to the decision console and chart cursor. |
+| **Strategy Telemetry** | How did each strategy behave across the lap? | Deployment comparison, regeneration, SoC, potential clipping risk, and battery temperature. |
+| **Stint Planner** | How should the energy budget evolve over several laps? | A five-lap default plan with build, normal, attack, recovery, and cooling modes. |
+| **Telemetry Explorer** | Which samples explain the result? | Filterable strategy records, command selection, risk thresholds, charts, and pagination. |
+| **Engineering Guide** | What do these signals mean? | Input contracts, decision logic, workflow, and model boundaries. |
+
+The web workspace keeps session selection, language, and theme consistent across its pages. Session changes fetch API data without a page reload. Selecting a chart point, track segment, or timeline event pauses the replay and focuses the corresponding decision.
+
+## System Architecture
+
+```mermaid
+flowchart TD
+    A[FastF1 Selected Driver's Fastest Lap] --> B[Normalize and Clean Telemetry]
+    B --> C[Track Segmentation and Look-Ahead Features]
+    C --> D[Fixed Map Simulation]
+    C --> E[Predictive Strategy Simulation]
+    D --> F[Comparative Metrics]
+    E --> F
+    E --> G[Decision Feed]
+    E --> H[Multi-Lap Energy Plan]
+    F --> I[FastAPI and Session Cache]
+    G --> I
+    H --> I
+    I --> J[Dashboard / Telemetry / Guide]
 ```
 
-Open `http://localhost:8001/`. Dashboard, Telemetry, and Guide use the same stable application shell. Session changes fetch JSON from `/api/*` without a page reload.
+The Python backend owns telemetry loading, track features, strategy requests, battery simulation, metrics, and planning. The separate HTML/CSS/JavaScript client presents those results through Plotly charts and synchronized decision views.
 
-Frontend responsibilities:
+| Layer | Responsibility | Implementation |
+| --- | --- | --- |
+| Telemetry | Load the selected driver's fastest lap; normalize units and clean samples. | [`data.py`](src/race_energy_orchestrator/data.py) |
+| Track Features | Classify segments, infer aero modes, and identify upcoming straight demand. | [`segmentation.py`](src/race_energy_orchestrator/segmentation.py) |
+| Strategy | Generate fixed and predictive deploy/regen requests. | [`strategy.py`](src/race_energy_orchestrator/strategy.py) |
+| Simulation | Apply energy limits, efficiencies, temperature dynamics, and power constraints. | [`model.py`](src/race_energy_orchestrator/model.py) |
+| Analysis | Calculate comparative metrics and emit operator decisions. | [`metrics.py`](src/race_energy_orchestrator/metrics.py), [`live.py`](src/race_energy_orchestrator/live.py) |
+| Planning | Project a bounded multi-lap energy budget from a representative lap. | [`stint.py`](src/race_energy_orchestrator/stint.py) |
+| Delivery | Validate API contracts and share session loads across requests. | [`api.py`](src/race_energy_orchestrator/api.py), [`session_cache.py`](src/race_energy_orchestrator/session_cache.py) |
+| Presentation | Session selection, localization, replay, filtering, and visual analysis. | [`web/`](web/) |
 
-- `web/*.html`: semantic page structure only
-- `web/assets/styles.css`: shared design and responsive layout
-- `web/assets/app.js`: API state, localization, filters, replay, and charts
+## Predictive Energy Control
 
-Backend responsibilities:
+The fixed map requests power according to the current segment, throttle, braking, and inferred aero state. The predictive strategy also examines upcoming long straights and reserves energy for future demand and the lap finish. On long straights, it spreads available energy over the remaining straight duration instead of requesting maximum power throughout.
 
-- `src/race_energy_orchestrator/api.py`: HTTP contracts and static-file serving
-- Python model modules: FastF1 loading, segmentation, strategy, simulation, metrics, and stint planning
+The controller currently uses **rule-based look-ahead budgeting**. Its internal identifier is `predictive_mpc`; it does not solve a numerical model predictive control optimization problem.
 
-## Offline report export
+The battery model limits actual deployment and regeneration according to available energy, capacity, efficiency, and temperature. The decision feed converts the resulting trace into four operator commands:
 
-The CLI still supports a portable, self-contained report when an explicit offline artifact is required:
+| Command | Meaning |
+| --- | --- |
+| `DEPLOY NOW` | Deployment meets the configured operator threshold, without a higher-priority hold or protection condition. |
+| `REGEN PRIORITY` | Regeneration meets the recovery threshold. |
+| `ENERGY HOLD` | Preserve the energy budget or respond to potential/realized clipping. |
+| `THERMAL PROTECT` | Prioritize thermal headroom as battery temperature constrains deployment. |
 
-```bash
-python -m race_energy_orchestrator --synthetic-only --output outputs/report.html
-```
+The stint planner extends this analysis across **3–10 projected laps**, with five as the default. It schedules `BUILD`, `NORMAL`, `ATTACK`, `RECOVER`, or `COOL` modes while maintaining capacity and minimum-reserve bounds. These projections reuse a representative lap; they are not measured future race laps.
 
-The exported report embeds its data and Plotly runtime by design. It is not the primary live web application. CSV files are not written unless an explicit output path is provided.
+## Configurable Model Profile
 
-The dashboard begins with a synthetic live-decision replay for the race engineer. It uses one operator command vocabulary (`THERMAL PROTECT`, `REGEN PRIORITY`, `ENERGY HOLD`, `DEPLOY NOW`) and separates realized clipping duration from potential future clipping risk. Deploy intensity is normalized against the MGU-K power-time envelope; it is not cumulative deploy energy divided by a single-lap battery capacity.
+The defaults below describe the project's **2026-style simulation profile**, rather than a measured car specification or a claim of regulatory compliance. All values live in [`EnergyConfig`](src/race_energy_orchestrator/config.py).
 
-The five-lap stint planner derives a multi-lap energy budget from the selected representative lap. It schedules `BUILD`, `NORMAL`, `ATTACK`, `RECOVER`, or `COOL` modes while enforcing Energy Store capacity, minimum reserve, regeneration acceptance, and battery-temperature limits. Its SoC and ERS outputs remain model estimates; the dashboard labels whether they are synthetic or derived from FastF1 telemetry.
+| Parameter | Default | Role |
+| --- | --- | --- |
+| MGU-K deploy / regen cap | 350 / 350 kW | Maximum requested electrical power. |
+| Energy Store capacity | 4.00 MJ | Upper bound on modeled battery energy. |
+| Initial / minimum energy | 3.15 / 0.18 MJ | Starting state and protected lower bound. |
+| Target finish reserve | 0.45 MJ | Predictive deployment reserve target. |
+| Deploy / regen efficiency | 0.96 / 0.72 | Conversion factors in the energy balance. |
+| Initial battery / ambient temperature | 43 / 28 °C | Thermal simulation initial conditions. |
+| Soft / hard thermal limit | 58 / 68 °C | Temperature thresholds for power limiting. |
+| Look-ahead horizon | 30 s | Upcoming straight demand considered by the controller. |
+| Operator deploy threshold | 200 kW | Threshold for the deployment command. |
 
-Scenario run with hotter ambient conditions and a lower starting battery state:
+## Data and Model Boundaries
 
-```bash
-python -m race_energy_orchestrator --synthetic-only --ambient-temp-c 34 --initial-soc-mj 2.6 --initial-battery-temp-c 52 --horizon-s 38 --output outputs/hot_scenario.html
-```
+The live API is scoped to **2026**, with 24 configured venues and `Q`, `R`, `FP1`, `FP2`, and `FP3` session choices. It requests real FastF1 lap telemetry and does not silently substitute synthetic laps. A configured future event returns `409`; unavailable FastF1 telemetry returns `503`. Passing the event-date check does not guarantee FastF1 has published the requested session.
 
-Compare orchestrator behavior across baseline, hot, low-SoC, and thermal-stress scenarios:
+| Signal | Basis | Interpretation |
+| --- | --- | --- |
+| Time, speed, throttle, brake, gear | FastF1 car telemetry | Public telemetry from the selected lap, normalized and cleaned. |
+| Distance | FastF1 distance calculation | Derived lap distance, not a measured circuit map. |
+| Segment and active aero state | Track-feature rules | Inferred categories, not actual aero actuator telemetry. |
+| SoC, deploy, regen, battery temperature | Energy and thermal simulation | Configurable estimates, not measured ERS or battery channels. |
+| Potential clipping risk | Uncovered upcoming energy demand | An energy shortfall indicator, not a calibrated failure probability. |
+| Lap-time gain and loss | Configurable performance proxy | A comparison within the model, not a measured improvement on track. |
+| Confidence and control score | Heuristic scoring | Decision-support indicators, not statistical guarantees. |
 
-```bash
-python -m race_energy_orchestrator --synthetic-only --compare-scenarios --output outputs/scenario_dashboard.html
-```
+**Replay is not a live race feed.** The console steps through decisions calculated from a loaded lap. Energy recommendations, future-lap budgets, and performance deltas remain model outputs.
 
-This adds the comparison table to the dashboard. To additionally export CSV data, pass `--metrics-output`, `--trace-output`, or `--comparison-output` explicitly.
+Explicit offline report generation can use deterministic synthetic laps for experiments and scenario comparisons. That capability is separate from the live API's real-telemetry requirement. Synthetic laps are simplified proxies, not faithful reproductions of each circuit's geometry.
 
-Build the static client copy:
+## Backend Reliability
 
-```bash
-./scripts/build-dashboard.sh
-npm run build
-```
+Session identity is keyed by **year, track, session, and driver**. Session and driver codes are normalized before lookup.
 
-`docs/` is generated from `web/` and marked as generated for GitHub Linguist. A static deployment still needs the API under the same `/api` origin or an equivalent reverse proxy.
+- **Shared loading:** simultaneous requests for the same selection share one load and simulation.
+- **Independent access:** loading a new session does not block reads of already cached sessions.
+- **Bounded retention:** up to 16 results per server process, with a 30-minute lifetime and least-recently-used eviction.
+- **Failure cooldown:** unavailable FastF1 data is retained for 30 seconds; responses include `Retry-After: 30`.
+- **Fresh retries:** future-event errors and unexpected model failures are not cached.
 
-API endpoints:
+The cache is in memory and local to each server process. Restarting clears it; separate workers do not share it. Tests cover concurrent success and failure, independent sessions, expiration, eviction, recovery, and invalidation during loading.
 
-- `GET /api/health`: service and data-source status
-- `GET /api/session`: current session metadata
-- `GET /api/metrics`: fixed-map and predictive-orchestrator KPI rows
-- `GET /api/options`: supported years, tracks, and session types
-- `GET /api/trace`: selected fixed/predictive telemetry traces for the live chart
-- `GET /api/decision?index=0`: one operator decision
-- `GET /api/decisions?start=0&limit=100`: paginated decision stream
-- `GET /api/scenarios`: selected-track scenario comparison
-- `GET /api/stint-plan?current_lap=1&horizon_laps=5`: bounded multi-lap energy plan
+## API Surface
 
-The live web panel only renders data returned by the FastAPI backend. If the API is offline or FastF1 has no telemetry, it shows a clear error state and does not substitute embedded telemetry. A future race returns `409` instead of fabricating telemetry.
+| Endpoint | Contract |
+| --- | --- |
+| `/api/health` | Service liveness; does not verify telemetry availability. |
+| `/api/options` | Configured year, venues, and session choices. |
+| `/api/session` | Selection context, data provenance, and model parameters. |
+| `/api/metrics` | Fixed-map and predictive strategy comparison. |
+| `/api/trace` | Both strategies' lap traces for charts. |
+| `/api/decision` | One indexed operator decision. |
+| `/api/decisions` | Paginated decision records. |
+| `/api/explorer` | Detailed records for both strategies. |
+| `/api/scenarios` | Baseline, hot, low-SoC, and thermal-stress comparisons. |
+| `/api/stint-plan` | Projected energy plan for a configurable lap horizon. |
 
-Outputs:
+---
 
-- `outputs/report.html`: self-contained Plotly HTML report
-- `web/`: primary live frontend source
-- `docs/`: generated static deployment copy
-- Optional CSV exports are created only when `--metrics-output`, `--trace-output`, or `--comparison-output` is explicitly passed.
-
-## Model Basis
-
-- FIA 2026 Formula One regulations category: https://www.fia.com/regulation/category/110
-- FIA 2026 Technical Regulations Section C, Issue 18: https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_c_technical_-_iss_18_-_2026-05-07.pdf
-- The default profile uses a configurable MGU-K deploy cap of 350 kW and explicitly synthetic battery/thermal/ERS assumptions.
-
-## Test
-
-```bash
-python -m pytest
-```
-
-## Build
-
-```bash
-./scripts/build-dashboard.sh
-npm run build
-```
+**Race Energy Orchestrator is an independent engineering prototype.** It is team-neutral and intended for inspecting energy strategy trade-offs using public telemetry and transparent model assumptions.
